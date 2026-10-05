@@ -20,12 +20,12 @@ interface Fragment {
 
 /** Where money usually lives: six places that never talk to each other. */
 const FRAGMENTS: Fragment[] = [
-  { label: "Conta", detail: "R$ 5.960", icon: Landmark, x: -390, y: -170, r: -6, mx: -84, my: -190 },
-  { label: "Cartão", detail: "Fatura R$ 2.450", icon: CreditCard, x: 360, y: -200, r: 5, mx: 84, my: -128 },
-  { label: "Planilha", detail: "aba “gastos_v3”", icon: FileSpreadsheet, x: -430, y: 110, r: 4, mx: -84, my: -62 },
-  { label: "Investimentos", detail: "R$ 28.450", icon: TrendingUp, x: 410, y: 100, r: -4, mx: 84, my: 2 },
-  { label: "Metas", detail: "num caderno", icon: Target, x: -190, y: 240, r: -3, mx: -84, my: 68 },
-  { label: "Assinaturas", detail: "R$ 189/mês", icon: Repeat, x: 210, y: 250, r: 6, mx: 84, my: 132 },
+  { label: "Conta", detail: "R$ 5.960", icon: Landmark, x: -390, y: -170, r: -6, mx: -84, my: -200 },
+  { label: "Cartão", detail: "Fatura R$ 2.450", icon: CreditCard, x: 360, y: -200, r: 5, mx: 84, my: -130 },
+  { label: "Planilha", detail: "aba “gastos_v3”", icon: FileSpreadsheet, x: -430, y: 110, r: 4, mx: -84, my: -70 },
+  { label: "Investimentos", detail: "R$ 28.450", icon: TrendingUp, x: 410, y: 100, r: -4, mx: 84, my: 10 },
+  { label: "Metas", detail: "num caderno", icon: Target, x: -190, y: 240, r: -3, mx: -84, my: 90 },
+  { label: "Assinaturas", detail: "R$ 189/mês", icon: Repeat, x: 210, y: 250, r: 6, mx: 84, my: 170 },
 ];
 
 /**
@@ -63,7 +63,7 @@ function ScrollFragmentation() {
   const mergedScale = useTransform(scrollYProgress, [0.5, 0.72], [0.82, 1]);
 
   return (
-    <section aria-labelledby="frag-a" ref={ref} className="relative h-[260vh]">
+    <section aria-labelledby="frag-a" ref={ref} className="relative h-[210vh] sm:h-[260vh]">
       <div className="sticky top-0 flex h-dvh flex-col items-center overflow-hidden px-4 pt-[clamp(96px,15vh,150px)]">
         <div className="relative z-10 grid place-items-center text-center [grid-template-areas:'t']">
           <motion.h2 id="frag-a" style={{ opacity: titleA, y: titleAy }} className="max-w-[16ch] font-display text-[clamp(34px,5.4vw,64px)] leading-[1.02] font-semibold tracking-[-0.04em] text-balance text-ink-900 [grid-area:t]">
@@ -76,7 +76,7 @@ function ScrollFragmentation() {
         <span className="sr-only">O Lastro conecta tudo: conta, cartão, planilha, investimentos, metas e assinaturas em um só lugar.</span>
 
         {/* the stage: fragments orbit its center, then become one surface there */}
-        <div className="pointer-events-none absolute inset-x-0 top-[calc(clamp(96px,15vh,150px)+clamp(100px,16vh,170px))] bottom-0 grid place-items-center" aria-hidden>
+        <div className="pointer-events-none absolute inset-x-0 top-[230px] bottom-[14vh] grid place-items-center sm:top-[calc(clamp(96px,15vh,150px)+clamp(100px,16vh,170px))] sm:bottom-0" aria-hidden>
           {FRAGMENTS.map((f, i) => (
             <FragmentChip key={f.label} f={f} k={k} narrow={narrow} progress={scrollYProgress} index={i} />
           ))}
@@ -91,7 +91,8 @@ function ScrollFragmentation() {
 }
 
 function FragmentChip({ f, k, narrow, progress, index }: { f: Fragment; k: number; narrow: boolean; progress: MotionValue<number>; index: number }) {
-  const start = 0.08 + index * 0.025;
+  // Chips hold still long enough to be read, then converge (a little staggered).
+  const start = 0.16 + index * 0.025;
   const fx = narrow ? f.mx : f.x * k;
   const fy = narrow ? f.my : f.y * k * 0.8;
   const x = useTransform(progress, [0, start, 0.56], [fx * 1.08, fx, 0]);

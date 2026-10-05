@@ -25,7 +25,7 @@ function enter(delay: number, reduce: boolean | null, from: { y?: number; scale?
 export function Hero() {
   const reduce = useReducedMotion();
   return (
-    <section aria-labelledby="hero-title" className="relative overflow-hidden px-4 pt-32 pb-20 sm:px-6 sm:pt-36 lg:px-10 lg:pb-28">
+    <section aria-labelledby="hero-title" className="relative overflow-hidden px-5 pt-32 pb-16 sm:px-6 sm:pt-36 lg:px-10 lg:pb-28">
       <div className="mx-auto max-w-[1160px] text-center">
         <motion.h1
           id="hero-title"
@@ -47,8 +47,67 @@ export function Hero() {
         </motion.p>
       </div>
 
-      <HeroProductScene />
+      <HeroMobileScene />
+      <div className="hidden lg:block">
+        <HeroProductScene />
+      </div>
     </section>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Phones: one clear object, then four calm tiles — nothing overlaps   */
+/* ------------------------------------------------------------------ */
+
+function HeroMobileScene() {
+  const reduce = useReducedMotion();
+  const tile = "rounded-[26px] bg-white/85 p-4 shadow-[0_14px_34px_-22px_rgba(22,80,180,0.55),inset_0_1px_0_#fff]";
+  return (
+    <div className="mx-auto mt-12 max-w-[440px] lg:hidden">
+      <p className="sr-only">
+        Prévia do aplicativo Lastro com dados de exemplo: R$ 5.960 disponíveis, Lastro 74, gasto de hoje e a meta Japão em 56%.
+      </p>
+      <motion.div {...enter(T.product, reduce, { y: 22, scale: 0.98 })}>
+        <BalanceSurface available={DEMO.available} income={DEMO.income} spent={DEMO.spent} saved={DEMO.saved} pace={DEMO.paceVsLastMonth} showActions={false} />
+      </motion.div>
+
+      <motion.ul {...enter(T.objects, reduce)} className="mt-3 grid grid-cols-2 gap-3 text-left" aria-hidden>
+        <li className={tile}>
+          <span className="flex items-center gap-1.5">
+            <span className="live-dot size-1.5 rounded-full bg-mint" />
+            <span className="text-[11px] font-bold tracking-[0.14em] text-ink-500 uppercase">Pulso hoje</span>
+          </span>
+          <AnimatedMoney value={DEMO.todaySpent} className="mt-2 text-ink-900" />
+          <p className="mt-1 text-[13px] leading-tight font-medium text-ink-700">No ritmo</p>
+        </li>
+        <li className={tile}>
+          <span className="text-[11px] font-bold tracking-[0.14em] text-ink-500 uppercase">Seu Lastro</span>
+          <p className="mt-2 flex items-baseline gap-2">
+            <AnimatedCounter value={DEMO.score} from={DEMO.previousScore} className="font-display text-[30px] leading-none font-semibold tracking-[-0.04em] text-ink-900" />
+            <span className="text-[13px] font-semibold text-mint-ink">+{DEMO.score - DEMO.previousScore}</span>
+          </p>
+          <p className="mt-1 text-[13px] leading-tight font-medium text-ink-700">Sólido</p>
+        </li>
+        <li className={tile}>
+          <span className="flex items-center gap-1.5 text-[11px] font-bold tracking-[0.14em] text-[#FF455D] uppercase">
+            <Plane className="size-3.5" /> Japão
+          </span>
+          <p className="mt-2 font-display text-[30px] leading-none font-semibold tracking-[-0.04em] text-ink-900">
+            56<span className="text-[16px] text-ink-500">%</span>
+          </p>
+          <div className="mt-2">
+            <ProgressPath value={DEMO.goal.saved / DEMO.goal.target} color={DEMO.goal.color} height={16} />
+          </div>
+        </li>
+        <li className={tile}>
+          <span className="text-[11px] font-bold tracking-[0.14em] text-ink-500 uppercase">Por dia</span>
+          <p className="mt-2 font-display text-[30px] leading-none font-semibold tracking-[-0.04em] text-ink-900">
+            <span className="text-[16px] text-ink-500">≈ R$ </span>76
+          </p>
+          <p className="mt-1 text-[13px] leading-tight font-medium text-ink-700">livres até o fim do mês</p>
+        </li>
+      </motion.ul>
+    </div>
   );
 }
 

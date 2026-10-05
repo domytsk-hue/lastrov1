@@ -16,8 +16,8 @@ export function MonthStory() {
           <SectionHeading id="month-title" kicker="Seu mês" title="Entenda seu mês em segundos." lead="Quanto entrou, quanto saiu, quanto ficou guardado — e quanto você ainda tem." />
           <ul className="mt-10 flex flex-col gap-3">
             {WITHOUT.map((line, i) => (
-              <Rise key={line} as="div" delay={0.15 + i * 0.12} className="flex items-center gap-3 text-[18px] font-medium text-ink-900">
-                <span className="grid size-8 place-items-center rounded-full bg-mint/20 text-mint-ink">
+              <Rise key={line} as="div" delay={0.15 + i * 0.12} className="flex items-start gap-3 text-[18px] leading-8 font-medium text-ink-900">
+                <span className="grid size-8 shrink-0 place-items-center rounded-full bg-mint/20 text-mint-ink">
                   <Check className="size-4" strokeWidth={3} />
                 </span>
                 {line}
