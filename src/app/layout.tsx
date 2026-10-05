@@ -9,6 +9,8 @@ const manrope = Manrope({ subsets: ["latin"], variable: "--font-manrope", displa
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
 
 export const metadata: Metadata = {
+  // Absolute base for Open Graph URLs. Set NEXT_PUBLIC_SITE_URL in production.
+  metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000"),
   title: { default: "Lastro", template: "%s · Lastro" },
   description: "Lastro torna seu progresso financeiro visível, compreensível e satisfatório.",
   applicationName: "Lastro",

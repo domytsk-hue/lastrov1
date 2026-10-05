@@ -127,3 +127,13 @@ body::after {
     transition-duration: 0.001ms !important;
   }
 }
+
+/* Smooth in-page anchors on the marketing site only (the product keeps native scrolling). */
+html:has(.marketing-site) {
+  scroll-behavior: smooth;
+}
+@media (prefers-reduced-motion: reduce) {
+  html:has(.marketing-site) {
+    scroll-behavior: auto;
+  }
+}

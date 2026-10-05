@@ -40,13 +40,26 @@ export function LastroOrbitView({
   score,
   previousScore = score,
   levelName,
+  selected: selectedProp,
+  onSelect,
+  hint = "Toque em uma dimensão para entender seu Lastro.",
 }: {
   dimensions: LastroDimension[];
   score: number;
   previousScore?: number;
   levelName: string;
+  /** Optional controlled selection (e.g. a guided tour). Uncontrolled when omitted. */
+  selected?: string | null;
+  onSelect?: (id: string | null) => void;
+  hint?: string;
 }) {
-  const [selected, setSelected] = useState<string | null>(null);
+  const [internal, setInternal] = useState<string | null>(null);
+  const controlled = selectedProp !== undefined;
+  const selected = controlled ? selectedProp : internal;
+  const setSelected = (id: string | null) => {
+    if (!controlled) setInternal(id);
+    onSelect?.(id);
+  };
   const sel = selected ? (dimensions.find((d) => d.id === selected) ?? null) : null;
   const data = dimensions.map(({ id, label, value, color, colorTo }) => ({ id, label, value, color, colorTo }));
 
@@ -126,7 +139,7 @@ export function LastroOrbitView({
           </motion.div>
         )}
       </AnimatePresence>
-      {!selected && <p className="-mt-2 text-center text-[13px] text-ink-500">Toque em uma dimensão para entender seu Lastro.</p>}
+      {!selected && hint && <p className="-mt-2 text-center text-[13px] text-ink-500">{hint}</p>}
     </section>
   );
 }

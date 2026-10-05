@@ -6,6 +6,8 @@
 /** Public marketing site. */
 export const MARKETING_ROUTES = {
   home: "/",
+  termos: "/termos",
+  privacidade: "/privacidade",
 } as const;
 
 /** Public authentication. */
