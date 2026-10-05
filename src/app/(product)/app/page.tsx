@@ -1,0 +1,8 @@
+import type { Metadata } from "next";
+import { HomeScreen } from "@/components/product/screens/HomeScreen";
+
+export const metadata: Metadata = { title: "Início" };
+
+export default function Page() {
+  return <HomeScreen />;
+}

@@ -1,0 +1,129 @@
+/* ------------------------------------------------------------------
+   LASTRO BASE — document defaults, the atmospheric environment,
+   shared keyframes and reduced-motion handling.
+   ------------------------------------------------------------------ */
+
+html {
+  background: var(--color-env);
+  -webkit-tap-highlight-color: transparent;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  background: var(--color-env);
+  color: var(--color-ink-900);
+  font-family: var(--font-sans);
+  min-height: 100dvh;
+  overscroll-behavior-y: none;
+}
+
+/* The environment: two soft lights that drift a few pixels over ~20s. */
+body::before,
+body::after {
+  content: "";
+  position: fixed;
+  pointer-events: none;
+  z-index: 0;
+  border-radius: 50%;
+}
+body::before {
+  width: 90vmax;
+  height: 90vmax;
+  top: -45vmax;
+  right: -30vmax;
+  background: radial-gradient(closest-side, rgba(101, 183, 242, 0.55), rgba(140, 203, 255, 0.18) 55%, transparent 75%);
+  animation: lastro-drift-a 22s ease-in-out infinite alternate;
+}
+body::after {
+  width: 80vmax;
+  height: 80vmax;
+  bottom: -40vmax;
+  left: -30vmax;
+  background: radial-gradient(closest-side, rgba(255, 255, 255, 0.85), rgba(246, 251, 255, 0.35) 55%, transparent 75%);
+  animation: lastro-drift-b 26s ease-in-out infinite alternate;
+}
+
+@keyframes lastro-drift-a {
+  to {
+    transform: translate3d(-24px, 18px, 0);
+  }
+}
+@keyframes lastro-drift-b {
+  to {
+    transform: translate3d(20px, -16px, 0);
+  }
+}
+
+::selection {
+  background: rgba(54, 120, 245, 0.25);
+}
+
+:focus-visible {
+  outline: 2.5px solid var(--color-electric);
+  outline-offset: 3px;
+  border-radius: 14px;
+}
+
+/* Inputs inside a field wrapper: the wrapper shows focus. */
+.field-input:focus-visible {
+  outline: none;
+}
+
+@keyframes lastro-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.35;
+    transform: scale(0.7);
+  }
+}
+
+@keyframes lastro-flow {
+  from {
+    transform: translateX(0);
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  to {
+    transform: translateX(var(--flow-distance, 100px));
+    opacity: 0;
+  }
+}
+
+@keyframes lastro-shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.live-dot {
+  animation: lastro-pulse 2.4s ease-in-out infinite;
+}
+
+.skeleton {
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.5) 25%, rgba(255, 255, 255, 0.85) 50%, rgba(255, 255, 255, 0.5) 75%);
+  background-size: 200% 100%;
+  animation: lastro-shimmer 1.6s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

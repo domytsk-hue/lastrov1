@@ -1,7 +1,7 @@
 "use client";
 
 import { motion, useReducedMotion } from "framer-motion";
-import { tween } from "@/lib/motion";
+import { tween } from "@/design-system/motion";
 
 /** Page transitions between primary areas: a short lift and fade, never dramatic. */
 export default function Template({ children }: { children: React.ReactNode }) {

@@ -1,0 +1,54 @@
+/* ------------------------------------------------------------------
+   LASTRO DESIGN TOKENS — the single source of truth.
+   Colors, type, radii-in-use and motion easing. Consumed by Tailwind (@theme),
+   so every experience (marketing, auth, product) gets the same utilities:
+   bg-electric, text-ink-900, font-display…
+   ------------------------------------------------------------------ */
+@theme {
+  /* Atmosphere */
+  --color-ice: #cde9ff;
+  --color-sky: #8ccbff;
+  --color-blue-soft: #65b7f2;
+  --color-electric: #3678f5;
+  --color-deep: #173d91;
+  --color-midnight: #071a3b;
+  --color-navy: #061126;
+  --color-snow: #f6fbff;
+  --color-env: #d7eeff;
+
+  /* Text on light surfaces */
+  --color-ink-900: #081525;
+  --color-ink-700: #23395a;
+  --color-ink-500: #4f6a8e;
+  --color-ink-400: #7890af;
+
+  /* Accents (used sparingly) */
+  --color-mint: #18e0ae;
+  --color-mint-ink: #08876a; /* mint that passes contrast on light surfaces */
+  --color-amber: #f5a524;
+  --color-amber-ink: #a8620a;
+  --color-rose: #f0566b;
+  --color-rose-ink: #c22f45;
+  --color-violet: #6e56f8;
+
+  /* Type */
+  --font-display: "Telegraf", var(--font-manrope), "SF Pro Display", -apple-system, system-ui, sans-serif;
+  --font-sans: "SF Pro Text", -apple-system, BlinkMacSystemFont, var(--font-inter), system-ui, sans-serif;
+
+  --ease-lastro: cubic-bezier(0.22, 1, 0.36, 1);
+
+  /* Shape language (generates rounded-hero, rounded-surface…) */
+  --radius-hero: 40px; /* primary financial objects */
+  --radius-surface: 36px; /* organic cards */
+  --radius-card: 28px; /* secondary surfaces */
+  --radius-control: 20px; /* inputs, keys */
+
+  /* Breakpoints: Tailwind defaults — mobile-first, sm 640px, md 768px, lg 1024px (desktop canvas). */
+}
+
+:root {
+  color-scheme: light;
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --shadow-soft: 0 18px 50px -22px rgba(22, 80, 180, 0.28);
+  --shadow-lift: 0 28px 70px -26px rgba(22, 80, 180, 0.42);
+}

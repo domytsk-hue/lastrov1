@@ -20,7 +20,7 @@ Reference: Nexora (visual philosophy only). Business logic in `src/lib` stays un
 | `TransactionComposer` in a dark modal-style sheet | Conventional form | **BottomComposer**: an ice-blue floating sheet. The app underneath scales and blurs. The amount is huge, keys float in white, actions are navy, and the selected category chip morphs into place. On save the button compresses, the amount flies to the balance, the balance rolls, and the toast shows the consequence "≈ R$ 76 → R$ 72 por dia". |
 | 12-column grid, `card` everywhere | Assembled, not composed | A vertical financial story: state → movement → progress → attention → goals. On desktop, a controlled asymmetric canvas with offsets and overlaps. |
 
-## Surface archetypes (`src/components/surfaces`)
+## Surface archetypes (`src/components/shared/surfaces`)
 
 1. **BlueHero**: the gradient object with inner highlight and cursor-following light.
 2. **Capsule / DataCapsule**: pills for deltas, chips and tabs.
@@ -30,7 +30,7 @@ Reference: Nexora (visual philosophy only). Business logic in `src/lib` stays un
 
 Plus a **NavySurface** for dark rhythm sections.
 
-## Motion system (`src/lib/motion.ts`)
+## Motion system (`src/design-system/motion.ts`)
 
 - **Durations:** fast 140ms · normal 280ms · slow 520ms.
 - **Springs:** soft (260/26) and snappy (400/32).

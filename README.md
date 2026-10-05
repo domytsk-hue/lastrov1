@@ -6,28 +6,29 @@ This repository holds **Phase 1**: the design system, the app shell, and a worki
 
 ```bash
 npm install
-npm run dev        # http://localhost:3000 → /home
-npm test           # finance engine, calculator and natural-language parser
+npm run dev        # http://localhost:3000  (/ site · /app product)
+npm test           # finance engine, calculator, NL parser, auth rules
+npm run check:boundaries   # layer import rules
 npm run typecheck
 ```
 
 ## Contas (login e cadastro)
 
-`/entrar` has two tabs: **Entrar** and **Criar conta**.
+`/login` and `/cadastro` are one screen with two tabs: **Entrar** and **Criar conta**.
 
 - **Sign-up** asks for name, email or phone, and a password.
 - **Contact field:** one field takes either an email or a Brazilian phone. A phone is masked as you type, `(11) 98765-4321`, and stored as `+5511987654321`. That means `11987654321`, `+55 11 98765-4321` and `(11) 98765-4321` all reach the same account.
 - **Password:** at least 8 characters, with one letter and one number. A checklist updates live as you type.
 - **Error messages:** a failed login says the same thing whether the contact or the password was wrong. Duplicate accounts are refused.
 - **Demo mode:** "Explorar com dados de demonstração" opens Lucas' demo account.
-- **Access:** without a session, every route redirects to `/entrar`. With one, `/entrar` sends you to `/home`. Perfil has *Sair*.
+- **Access:** without a session, `/app/*` redirects to `/login`. With one, `/login` and `/cadastro` send you to `/app`. The marketing site (`/`) is always public. Perfil has *Sair*.
 - **Separate data:** each account keeps its own financial data, and a new account starts empty, with guiding empty states.
 
 **Important — no server yet.** Accounts are stored in the browser (`localStorage`).
 
 - **Passwords:** hashed with PBKDF2-SHA256 (210k iterations, random salt per user).
 - **What this means:** it's good for a prototype, but it is not server security. Anyone with access to the device can see the data.
-- **Moving to a real backend:** `src/store/auth-store.tsx` exposes an `AuthService` interface (`signUp`, `signIn`, `enterDemo`). A real backend only needs to implement it. The validation rules in `src/lib/auth.ts` are pure and can be reused on the server.
+- **Moving to a real backend:** `src/auth/auth-store.tsx` exposes an `AuthService` interface (`signUp`, `signIn`, `enterDemo`). A real backend only needs to implement it. The validation rules in `src/auth/rules.ts` are pure and can be reused on the server.
 
 ## Signature elements
 
@@ -39,32 +40,25 @@ npm run typecheck
 
 ## Architecture
 
+Lastro has three layers in one repo: **marketing** (`/`), **product** (`/app/*`) and the **shared** design system. Authentication (`/login`, `/cadastro`) sits between them. See **[docs/architecture.md](docs/architecture.md)** for the full map, the dependency rules and the provider strategy.
+
 ```
-src/
-  lib/            pure, framework-free business logic (unit tested with node:test)
-    types.ts        domain models (User, Account, Transaction, Budget, Goal, …)
-    finance.ts      balances, budgets, projections, reserve, goals, Lastro score, pulse, insights
-    calculator.ts   safe expression parser: 125 + 32,50 + 18 · 200 - 10% · 200 / 4 → parcelas
-    quick-entry.ts  "gastei 89 no mercado", "120 gasolina ontem", "coloca 300 na reserva"
-    feedback.ts     the one-line consequence shown after every movement
-    missions.ts     weekly missions derived from real behaviour
-  data/           categories + deterministic demo generator (relative to today)
-  store/          reducer (pure) + React context with localStorage persistence
-  components/     ui primitives · shell · home · transactions · budgets · goals · reserve · charts · grow
-  app/            Next.js routes; each page is a thin wrapper over a *Screen client component
+src/app/(marketing)  src/app/(auth)  src/app/(product)/app     ← routes only
+src/design-system                                                ← tokens, surfaces, motion (one source of truth)
+src/components/{shared,marketing,auth,product}                   ← UI by layer
+src/product/{domain,data,store}   src/auth   src/config/routes.ts   src/lib
 ```
 
-- **One source of truth.** Account balances, goal progress and the reserve are all derived from the transaction list, so recording R$ 45 in Alimentação updates the available balance, the month summary, the budget, Pulso, the projection, insights and the Lastro score at the same moment.
-- **Everything is "as of" a date**, so the app can compare with the same day last month, or with your score a week ago.
-- `dispatch` returns the next state synchronously. That lets the composer show the real consequence ("Alimentação: R$ 904 disponíveis · R$ 33/dia") the instant you save.
-- The natural-language parser returns a `ParsedEntry`, which an AI model could later fill instead without touching the UI.
+- **One source of truth.** Account balances, goal progress and the reserve all come from the transaction list. Recording R$ 45 in Alimentação updates the balance, budget, Pulso, projection, insights and the Lastro score at once.
+- **Everything is "as of" a date,** so the app can compare with the same day last month, or with your score a week ago.
+- `npm run check:boundaries` fails the build if a layer imports one it shouldn't, for example shared → product or marketing → product.
 
 ## Design language
 
 Lastro is designed as a personal financial *object*, not a dashboard. See [`docs/redesign-plan.md`](docs/redesign-plan.md) for the component-by-component mapping.
 
 - **Environment:** an ice-blue background (`#D7EEFF`) lit by two soft lights that drift slowly. Depth comes from layered surfaces, light from the top-left, and shadow, never from borders.
-- **Surfaces** (`src/components/surfaces`):
+- **Surfaces** (`src/components/shared/surfaces`, `src/components/shared/data-viz`):
   - **BlueHero:** the blue gradient object at the top of Home.
   - **Organic light card:** asymmetric radii.
   - **Navy surface:** a dark section that gives the page rhythm.
@@ -73,7 +67,7 @@ Lastro is designed as a personal financial *object*, not a dashboard. See [`docs
   - **Orbit:** a ring of variable-thickness segments with labels that run along it.
   - **CurvedGauge, ProgressPath and ProtectionLayers:** custom progress shapes.
 - **Numbers:** `AnimatedMoney`, `AnimatedCounter` and `AnimatedPercentage` roll each digit independently and animate only transform.
-- **Motion:** tokens live in `src/lib/motion.ts` (fast 140ms · normal 280ms · slow 520ms; springs soft 260/26 and snappy 400/32).
+- **Motion:** tokens live in `src/design-system/motion.ts` (fast 140ms · normal 280ms · slow 520ms; springs soft 260/26 and snappy 400/32).
   - Page transitions use `app/template.tsx`.
   - Home enters in 80ms steps.
   - After a save, the amount flies from the composer to the balance through `FlowLayer`, and the balance digits then roll.

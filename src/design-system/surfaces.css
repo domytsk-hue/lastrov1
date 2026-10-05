@@ -1,0 +1,64 @@
+/* ------------------------------------------------------------------
+   LASTRO SURFACES & UTILITIES — the physical layers of the interface.
+   Light comes from the top-left everywhere.
+   ------------------------------------------------------------------ */
+
+/* 1. Hero — the blue financial object. */
+@utility surface-hero {
+  background:
+    radial-gradient(120% 90% at 0% 0%, rgba(255, 255, 255, 0.28), transparent 55%),
+    linear-gradient(135deg, #7ccbff 0%, #4f9ff8 34%, #3678f5 62%, #2753cc 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.4),
+    inset 0 -1px 0 rgba(7, 26, 59, 0.15),
+    0 30px 70px -28px rgba(22, 80, 180, 0.55);
+  color: white;
+}
+
+/* 3. Organic light surface. */
+@utility surface-light {
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.95) 0%, rgba(240, 248, 255, 0.82) 100%);
+  box-shadow:
+    inset 0 1px 0 #fff,
+    var(--shadow-soft);
+}
+
+/* Dark navy rhythm surface. */
+@utility surface-navy {
+  background:
+    radial-gradient(110% 80% at 0% 0%, rgba(101, 183, 242, 0.22), transparent 55%),
+    linear-gradient(160deg, #173d91 0%, #0d2a68 45%, #071a3b 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    0 30px 70px -30px rgba(7, 26, 59, 0.6);
+  color: white;
+}
+
+/* 2. Capsule on blue / navy surfaces. */
+@utility surface-glass {
+  background: rgba(255, 255, 255, 0.16);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28);
+}
+
+/* Capsule on light surfaces. */
+@utility surface-tint {
+  background: rgba(54, 120, 245, 0.08);
+}
+
+@utility tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+@utility eyebrow {
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+@utility no-scrollbar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}

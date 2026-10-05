@@ -1,4 +1,5 @@
-import type { ISODate } from "./types.ts";
+/** A local calendar day, YYYY-MM-DD. */
+export type ISODate = string;
 
 const brl = new Intl.NumberFormat("pt-BR", {
   style: "currency",

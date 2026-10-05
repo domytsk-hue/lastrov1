@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, Manrope } from "next/font/google";
-import { AppShell } from "@/components/shell/AppShell";
+import { RootProviders } from "./providers";
 import "./globals.css";
 
 // Telegraf (display) and SF Pro Text (UI) are used when installed on the device.
@@ -26,7 +26,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="pt-BR" className={`${manrope.variable} ${inter.variable}`}>
       <body>
-        <AppShell>{children}</AppShell>
+        <RootProviders>{children}</RootProviders>
       </body>
     </html>
   );
