@@ -1,6 +1,7 @@
 "use client";
 
 import { motion, useReducedMotion } from "framer-motion";
+import { useState } from "react";
 import { ArrowRight, BadgePercent, Check, KeyRound, Landmark, MonitorSmartphone, Trash2 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { formatNumber } from "@/lib/format";
@@ -163,8 +164,35 @@ function Price({ value, className, cents = "text-[0.42em]" }: { value: number; c
   );
 }
 
+type PlanId = "mensal" | "vitalicio";
+
+/** The radio dot in each card's header — the keyboard target of the plan picker. */
+function PlanRadio({ checked, onSelect, label, tone }: { checked: boolean; onSelect: () => void; label: string; tone: "light" | "dark" }) {
+  return (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={checked}
+      aria-label={label}
+      onClick={(e) => {
+        e.stopPropagation();
+        onSelect();
+      }}
+      className={cn(
+        "grid size-7 shrink-0 place-items-center rounded-full border-2 transition-colors",
+        tone === "light" ? (checked ? "border-mint bg-mint" : "border-white/60") : checked ? "border-electric bg-electric" : "border-ink-400",
+      )}
+    >
+      {checked && <Check className={cn("size-4", tone === "light" ? "text-midnight" : "text-white")} strokeWidth={3} aria-hidden />}
+    </button>
+  );
+}
+
 export function PricingSection() {
   const reduce = useReducedMotion();
+  // Lifetime is the default and the priority; the monthly card is one tap away.
+  const [plan, setPlan] = useState<PlanId>("vitalicio");
+  const monthly = plan === "mensal";
   const appear = (delay: number, from: { x?: number; y?: number; rotate?: number }) =>
     ({
       initial: reduce ? false : { opacity: 0, ...from },
@@ -183,17 +211,28 @@ export function PricingSection() {
         lead="Os dois planos têm tudo do Lastro. A diferença é quanto você paga por isso."
       />
 
-      <div className="relative mx-auto mt-14 flex max-w-[860px] flex-col items-center lg:mt-16 lg:flex-row lg:items-center lg:justify-center">
+      <div role="radiogroup" aria-label="Escolha seu plano" className="relative mx-auto mt-14 flex max-w-[860px] flex-col items-center lg:mt-16 lg:flex-row lg:items-center lg:justify-center">
         {/* Monthly — behind, tilted, still fully readable: it is the reference that makes the saving obvious */}
         <motion.article
           {...appear(0.05, { x: -24, y: 12 })}
           aria-labelledby="plan-monthly"
-          className="relative z-0 w-full max-w-[400px] lg:w-[360px] lg:translate-x-12"
+          onClick={() => setPlan("mensal")}
+          className={cn("relative w-full max-w-[400px] cursor-pointer transition-[translate] duration-500 lg:w-[360px]", monthly ? "z-20 lg:translate-x-0" : "z-0 lg:translate-x-12")}
         >
-          <div className="surface-light origin-bottom rounded-[36px] p-6 pb-14 opacity-95 max-lg:scale-[0.94] sm:p-7 sm:pb-14 lg:-rotate-3 lg:pr-20 lg:pb-7">
-            <p id="plan-monthly" className="text-[13px] font-bold tracking-[0.14em] text-ink-500 uppercase">
-              Mensal
-            </p>
+          <div
+            className={cn(
+              "surface-light origin-bottom rounded-[36px] p-6 transition-[scale,rotate,box-shadow,opacity] duration-500 sm:p-7",
+              monthly
+                ? "shadow-[0_0_0_2px_var(--color-electric),0_30px_60px_-30px_rgba(22,80,180,0.7)]"
+                : "pb-14 opacity-95 hover:opacity-100 max-lg:scale-[0.94] sm:pb-14 lg:-rotate-3 lg:pr-20 lg:pb-7",
+            )}
+          >
+            <div className="flex items-center justify-between gap-3">
+              <p id="plan-monthly" className="text-[13px] font-bold tracking-[0.14em] text-ink-500 uppercase">
+                Mensal
+              </p>
+              <PlanRadio checked={monthly} onSelect={() => setPlan("mensal")} label="Plano mensal, R$ 19,90 por mês" tone="dark" />
+            </div>
             <p className="mt-3 text-ink-900">
               <Price value={PRICING.monthly} className="text-[48px] leading-none" />
               <span className="ml-1 text-[16px] font-medium text-ink-500">/mês</span>
@@ -206,6 +245,7 @@ export function PricingSection() {
               </span>
             </p>
             <p className="mt-4 text-[14px] text-ink-700">Cobrança todo mês, enquanto você usar.</p>
+            {monthly && <PrimaryCta label="Assinar o mensal" plan="mensal" className="mt-6 w-full" />}
           </div>
         </motion.article>
 
@@ -213,16 +253,25 @@ export function PricingSection() {
         <motion.article
           {...appear(0.18, { y: 28 })}
           aria-labelledby="plan-lifetime"
-          className="relative z-10 -mt-10 w-full max-w-[420px] lg:mt-0 lg:-ml-6 lg:w-[420px]"
+          onClick={() => setPlan("vitalicio")}
+          className={cn("relative w-full max-w-[420px] cursor-pointer lg:mt-0 lg:-ml-6 lg:w-[420px]", monthly ? "z-10 mt-4" : "z-10 -mt-10")}
         >
-          <div className="surface-hero relative overflow-hidden rounded-[40px] p-7 shadow-[0_40px_80px_-30px_rgba(22,80,180,0.75)] sm:p-8">
+          <div
+            className={cn(
+              "surface-hero relative overflow-hidden rounded-[40px] p-7 shadow-[0_40px_80px_-30px_rgba(22,80,180,0.75)] transition-[scale,box-shadow] duration-500 sm:p-8",
+              monthly ? "scale-[0.97]" : "shadow-[0_0_0_2px_var(--color-mint),0_40px_80px_-30px_rgba(22,80,180,0.75)]",
+            )}
+          >
             <div aria-hidden className="pointer-events-none absolute -top-24 -right-20 size-64 rounded-full bg-white/15 blur-2xl" />
             <div className="relative">
               <div className="flex items-center justify-between gap-3">
                 <p id="plan-lifetime" className="text-[13px] font-bold tracking-[0.14em] text-white/80 uppercase">
                   Vitalício
                 </p>
-                <span className="rounded-full bg-mint px-3 py-1 text-[12px] font-bold text-midnight">Mais vantajoso</span>
+                <span className="flex items-center gap-2">
+                  <span className="rounded-full bg-mint px-3 py-1 text-[12px] font-bold text-midnight">Mais vantajoso</span>
+                  <PlanRadio checked={!monthly} onSelect={() => setPlan("vitalicio")} label="Plano vitalício, R$ 99,90 pagamento único" tone="light" />
+                </span>
               </div>
 
               <p className="mt-5 inline-flex rounded-full bg-midnight/40 px-3 py-1 text-[15px] font-semibold text-white/90">
@@ -249,7 +298,7 @@ export function PricingSection() {
                 ))}
               </ul>
 
-              <PrimaryCta label="Garantir o vitalício" tone="white" className="mt-8 w-full" />
+              <PrimaryCta label="Garantir o vitalício" plan="vitalicio" tone="white" className="mt-8 w-full" />
             </div>
           </div>
         </motion.article>

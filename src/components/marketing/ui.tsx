@@ -16,14 +16,27 @@ const MotionLink = motion.create(Link);
  * The primary conversion action. Signed-out visitors go to account creation;
  * someone who already has a session goes straight into the product.
  */
-export function PrimaryCta({ label = "Começar agora", className, size = "lg", tone = "navy" }: { label?: string; className?: string; size?: "md" | "lg"; tone?: "navy" | "mint" | "white" }) {
+export function PrimaryCta({
+  label = "Começar agora",
+  className,
+  size = "lg",
+  tone = "navy",
+  plan,
+}: {
+  label?: string;
+  className?: string;
+  size?: "md" | "lg";
+  tone?: "navy" | "mint" | "white";
+  /** Chosen plan, carried to sign-up as ?plano= so checkout can pick it up later. */
+  plan?: string;
+}) {
   const { session } = useAuth();
   const m = useMagnetic<HTMLAnchorElement>(3);
   const signedIn = !!session;
   return (
     <MotionLink
       ref={m.ref}
-      href={signedIn ? ROUTES.home : AUTH_ROUTES.cadastro}
+      href={signedIn ? ROUTES.home : plan ? `${AUTH_ROUTES.cadastro}?plano=${plan}` : AUTH_ROUTES.cadastro}
       whileTap={{ scale: 0.97 }}
       animate={{ x: m.offset.x, y: m.offset.y }}
       transition={spring.snappy}
