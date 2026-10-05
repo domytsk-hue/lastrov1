@@ -11,6 +11,24 @@ npm test           # finance engine, calculator and natural-language parser
 npm run typecheck
 ```
 
+## Contas (login e cadastro)
+
+`/entrar` has two tabs: **Entrar** and **Criar conta**.
+
+- **Sign-up** asks for name, email or phone, and a password.
+- **Contact field:** one field takes either an email or a Brazilian phone. A phone is masked as you type, `(11) 98765-4321`, and stored as `+5511987654321`. That means `11987654321`, `+55 11 98765-4321` and `(11) 98765-4321` all reach the same account.
+- **Password:** at least 8 characters, with one letter and one number. A checklist updates live as you type.
+- **Error messages:** a failed login says the same thing whether the contact or the password was wrong. Duplicate accounts are refused.
+- **Demo mode:** "Explorar com dados de demonstração" opens Lucas' demo account.
+- **Access:** without a session, every route redirects to `/entrar`. With one, `/entrar` sends you to `/home`. Perfil has *Sair*.
+- **Separate data:** each account keeps its own financial data, and a new account starts empty, with guiding empty states.
+
+**Important — no server yet.** Accounts are stored in the browser (`localStorage`).
+
+- **Passwords:** hashed with PBKDF2-SHA256 (210k iterations, random salt per user).
+- **What this means:** it's good for a prototype, but it is not server security. Anyone with access to the device can see the data.
+- **Moving to a real backend:** `src/store/auth-store.tsx` exposes an `AuthService` interface (`signUp`, `signIn`, `enterDemo`). A real backend only needs to implement it. The validation rules in `src/lib/auth.ts` are pure and can be reused on the server.
+
 ## Signature elements
 
 | | |
@@ -60,7 +78,8 @@ These are defined in `src/app/globals.css` (Tailwind v4 `@theme`):
 ## Not yet built (next phases)
 
 - Onboarding flow
-- Real auth and sync (data currently lives in `localStorage`)
+- Server-side auth and sync (accounts and data currently live in `localStorage`)
+- Password recovery and email/SMS verification
 - Bank connections
 - AI-backed entry
 - Remaining Academy lessons

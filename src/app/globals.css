@@ -89,6 +89,11 @@ body::before {
   border-radius: 12px;
 }
 
+/* Inputs inside a field wrapper: the wrapper shows focus with its border. */
+.field-input:focus-visible {
+  outline: none;
+}
+
 @utility tabular {
   font-variant-numeric: tabular-nums;
 }

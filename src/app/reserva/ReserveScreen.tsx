@@ -42,9 +42,18 @@ export function ReserveScreen() {
               <span className="text-[13px] font-semibold">{formatNumber(r.months, 1)} meses protegidos</span>
             </div>
             <MoneyValue value={r.balance} size="hero" cents={false} className="mt-3" />
-            <p className="mt-4 max-w-md font-display text-[20px] leading-snug font-medium tracking-[-0.015em] text-off">
+            {state.reserve.monthlyCost <= 0 && (
+              <div className="mt-5 rounded-[18px] bg-white/[0.05] p-4">
+                <p className="text-[15px] font-semibold">Quanto custa um mês essencial da sua vida?</p>
+                <p className="mt-1 text-[13px] text-soft">Com esse número, o Lastro mostra quantos dias sua reserva protege.</p>
+                <Button size="sm" className="mt-3" onClick={() => setSettings(true)}>
+                  Definir custo essencial
+                </Button>
+              </div>
+            )}
+            {state.reserve.monthlyCost > 0 && <p className="mt-4 max-w-md font-display text-[20px] leading-snug font-medium tracking-[-0.015em] text-off">
               Hoje, sua reserva cobriria cerca de <span className="text-green">{r.days} dias</span> do seu estilo de vida atual.
-            </p>
+            </p>}
             <div className="mt-7">
               <ReserveDays days={r.days} targetMonths={state.reserve.targetMonths} />
             </div>

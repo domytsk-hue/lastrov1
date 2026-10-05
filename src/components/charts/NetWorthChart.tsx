@@ -29,7 +29,9 @@ export function NetWorthChart({
   const PAD_T = 28;
   const PAD_B = 26;
 
+  const enough = series.length >= 2;
   const geo = useMemo(() => {
+    if (series.length < 2) return { pts: [{ x: W / 2, y: H / 2 }], line: "", area: "", ms: [] as (Milestone & { idx: number; x: number; y: number })[] };
     const vals = series.map((p) => p.value);
     const min = Math.min(...vals);
     const max = Math.max(...vals);
@@ -60,6 +62,14 @@ export function NetWorthChart({
     });
     setActive(best);
   };
+
+  if (!enough) {
+    return (
+      <div className="grid place-items-center rounded-[18px] border border-dashed border-white/10 px-6 text-center" style={{ height }}>
+        <p className="max-w-xs text-[14px] text-soft">Seu gráfico de patrimônio começa a se desenhar a partir do segundo mês de uso.</p>
+      </div>
+    );
+  }
 
   const last = geo.pts.length - 1;
   const shown = active ?? last;

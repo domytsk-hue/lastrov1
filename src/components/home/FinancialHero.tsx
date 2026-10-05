@@ -32,6 +32,7 @@ export function FinancialHero() {
   }, [state, today]);
 
   const { b, m, momentum, pace, nw } = data;
+  const fresh = m.income === 0 && m.expenses === 0;
   const base = Math.max(m.income, m.expenses + m.invested + m.saved, 1);
   const seg = [
     { key: "expenses", value: m.expenses, color: "rgba(244,246,248,0.92)", label: "Gastos" },
@@ -72,13 +73,15 @@ export function FinancialHero() {
 
           {/* Momentum */}
           <div className="mt-5 flex items-center gap-3">
-            <ProgressRing value={momentum / 100} size={44} stroke={4} color="#ffffff" track="rgba(255,255,255,0.18)">
-              <span className="font-display text-[13px] font-semibold tabular text-white">{momentum}</span>
+            <ProgressRing value={fresh ? 0 : momentum / 100} size={44} stroke={4} color="#ffffff" track="rgba(255,255,255,0.18)">
+              <span className="font-display text-[13px] font-semibold tabular text-white">{fresh ? "—" : momentum}</span>
             </ProgressRing>
             <div className="min-w-0">
-              <p className="text-[12px] font-semibold tracking-[0.08em] text-white/60 uppercase">Seu mês · {momentum}%</p>
+              <p className="text-[12px] font-semibold tracking-[0.08em] text-white/60 uppercase">Seu mês{fresh ? "" : ` · ${momentum}%`}</p>
               <p className="text-[14px] leading-snug text-white/90">
-                {Math.abs(pace) < 20 ? (
+                {fresh ? (
+                  "Registre sua primeira movimentação e o Lastro começa a medir seu mês."
+                ) : Math.abs(pace) < 20 ? (
                   "Você está no mesmo ritmo do mês passado."
                 ) : pace > 0 ? (
                   <>

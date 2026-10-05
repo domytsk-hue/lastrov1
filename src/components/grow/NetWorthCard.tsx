@@ -22,11 +22,17 @@ export function NetWorthCard({ height = 180, link = true }: { height?: number; l
           </h2>
           <MoneyValue value={change.now} size="xl" cents={false} className="mt-1" />
           <p className="mt-2 flex flex-wrap items-center gap-x-2 text-[13px] text-soft">
-            <span className="flex items-center gap-1 font-semibold text-green">
-              <TrendingUp className="size-3.5" />
-              <Money value={change.yearDelta} sign />
-            </span>
-            em 12 meses
+            {series.length > 1 ? (
+              <>
+                <span className="flex items-center gap-1 font-semibold text-green">
+                  <TrendingUp className="size-3.5" />
+                  <Money value={change.yearDelta} sign />
+                </span>
+                em {series.length - 1} {series.length === 2 ? "mês" : "meses"}
+              </>
+            ) : (
+              "Hoje é o primeiro ponto da sua história."
+            )}
             {change.record && <span className="rounded-full bg-yellow/12 px-2 py-0.5 text-[11px] font-semibold text-yellow">Recorde</span>}
           </p>
         </div>
@@ -39,7 +45,7 @@ export function NetWorthCard({ height = 180, link = true }: { height?: number; l
       <div className="mt-6">
         <NetWorthChart series={series} milestones={state.milestones} height={height} />
       </div>
-      <p className="mt-4 text-[14px] text-off">Sua vida financeira está avançando.</p>
+      {change.yearDelta > 0 && series.length > 1 && <p className="mt-4 text-[14px] text-off">Sua vida financeira está avançando.</p>}
     </section>
   );
 }

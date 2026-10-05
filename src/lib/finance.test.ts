@@ -40,3 +40,24 @@ test("reserve converts to days", () => {
   assert.equal(r.days, 93);
   assert.equal(r.target, 24000);
 });
+
+test("a brand-new empty account produces finite numbers everywhere", async () => {
+  const { createEmptyState } = await import("../data/mock.ts");
+  const F = await import("./finance.ts");
+  const today = "2026-10-05";
+  const s = createEmptyState(today, "Ana");
+  const values = [
+    F.lastroScore(s, today).score,
+    ...F.lastroScore(s, today).pillars.map((p) => p.value),
+    F.monthMomentum(s, today),
+    F.balances(s, today).netWorth,
+    F.projectMonth(s, today).free,
+    F.reserveStatus(s, today).progress,
+    F.reserveStatus(s, today).days,
+    F.pulse(s, today).netWorthDelta,
+    F.budgetHealth(s, today),
+  ];
+  for (const v of values) assert.ok(Number.isFinite(v), `not finite: ${v}`);
+  assert.equal(F.netWorthChange(s, today).record, false);
+  for (const i of F.insights(s, today)) assert.ok(!/NaN|undefined/.test(i.title), i.title);
+});

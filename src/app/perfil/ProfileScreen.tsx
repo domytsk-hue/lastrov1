@@ -1,14 +1,16 @@
 "use client";
 
-import { ChevronRight, Eye, Fingerprint, KeyRound, Landmark, RotateCcw, Shapes, Target } from "lucide-react";
+import { AtSign, ChevronRight, Eye, Fingerprint, KeyRound, Landmark, LogOut, Phone, RotateCcw, Shapes, Target } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { EXPENSE_CATEGORIES, INCOME_CATEGORIES } from "@/data/categories";
+import { formatIdentifier } from "@/lib/auth";
 import { evaluate } from "@/lib/calculator";
 import { cn } from "@/lib/cn";
 import { lastroLevel, lastroScore, streak } from "@/lib/finance";
 import { formatMonthYear, formatNumber } from "@/lib/format";
 import type { User } from "@/lib/types";
+import { useAuth } from "@/store/auth-store";
 import { useFinance } from "@/store/finance-store";
 import { useUI } from "@/store/ui-store";
 import { LastroMark } from "@/components/shell/LastroMark";
@@ -27,7 +29,8 @@ const OBJECTIVES: { value: User["objective"]; label: string }[] = [
 ];
 
 export function ProfileScreen() {
-  const { state, today, resetDemo } = useFinance();
+  const { state, today, resetDemo, isDemo } = useFinance();
+  const { session, signOut } = useAuth();
   const { privacy, togglePrivacy } = useUI();
   const toast = useToast();
   const [sheet, setSheet] = useState<"profile" | "categories" | null>(null);
@@ -50,6 +53,27 @@ export function ProfileScreen() {
       </section>
 
       <div className="grid gap-6 lg:grid-cols-2">
+        <Group title="Conta">
+          {session?.identifier ? (
+            <Row
+              icon={session.identifier.kind === "email" ? <AtSign className="size-[18px]" /> : <Phone className="size-[18px]" />}
+              label={session.identifier.kind === "email" ? "E-mail" : "Telefone"}
+              value={formatIdentifier(session.identifier)}
+              disabled
+            />
+          ) : (
+            <Row icon={<AtSign className="size-[18px]" />} label="Modo demonstração" value="Sem conta" disabled />
+          )}
+          <li>
+            <button onClick={signOut} className="flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors hover:bg-white/[0.02]">
+              <span className="grid size-9 place-items-center rounded-[12px] bg-coral/10 text-coral-light">
+                <LogOut className="size-[18px]" />
+              </span>
+              <span className="flex-1 text-[15px] font-medium">{isDemo ? "Sair da demonstração" : "Sair"}</span>
+            </button>
+          </li>
+        </Group>
+
         <Group title="Você">
           <Row icon={<Target className="size-[18px]" />} label="Objetivo e renda" value={OBJECTIVES.find((o) => o.value === state.user.objective)?.label} onClick={() => setSheet("profile")} />
           <Row icon={<Landmark className="size-[18px]" />} label="Contas" value={`${state.accounts.length} contas`} href="/movimentacoes?aba=contas" />
@@ -78,21 +102,21 @@ export function ProfileScreen() {
           <Row icon={<KeyRound className="size-[18px]" />} label="Seus dados" value="Salvos só neste aparelho" disabled />
         </Group>
 
-        <Group title="Demonstração">
+        <Group title={isDemo ? "Demonstração" : "Dados"}>
           <li className="px-4 py-3.5">
             {confirmReset ? (
               <div className="flex items-center justify-between gap-3">
-                <p className="text-[14px] text-soft">Apagar suas alterações e voltar aos dados do Lucas?</p>
+                <p className="text-[14px] text-soft">{isDemo ? "Apagar suas alterações e voltar aos dados do Lucas?" : "Apagar todas as movimentações, metas e orçamentos desta conta?"}</p>
                 <Button
                   size="sm"
                   variant="danger"
                   onClick={() => {
                     resetDemo();
                     setConfirmReset(false);
-                    toast.show({ title: "Dados de demonstração restaurados", tone: "neutral" });
+                    toast.show({ title: isDemo ? "Dados de demonstração restaurados" : "Seus dados foram apagados", tone: "neutral" });
                   }}
                 >
-                  Restaurar
+                  {isDemo ? "Restaurar" : "Apagar"}
                 </Button>
               </div>
             ) : (
@@ -100,7 +124,7 @@ export function ProfileScreen() {
                 <span className="grid size-9 place-items-center rounded-[12px] bg-white/[0.05] text-soft">
                   <RotateCcw className="size-[18px]" />
                 </span>
-                <span className="flex-1 text-[15px] font-medium">Restaurar dados de demonstração</span>
+                <span className="flex-1 text-[15px] font-medium">{isDemo ? "Restaurar dados de demonstração" : "Começar do zero"}</span>
               </button>
             )}
           </li>

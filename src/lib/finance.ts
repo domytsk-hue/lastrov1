@@ -260,7 +260,8 @@ const STATE_RANK: Record<BudgetState, number> = { healthy: 0, attention: 1, crit
 
 export function budgetHealth(state: FinanceState, asOf: ISODate) {
   const list = allBudgets(state, asOf);
-  if (!list.length) return 1;
+  // No budgets yet: we simply don't know — neither healthy nor alarming.
+  if (!list.length) return 0.5;
   const weight = list.reduce((s, b) => s + b.limit, 0);
   return list.reduce((s, b) => s + STATE_SCORE[b.state] * b.limit, 0) / weight;
 }
@@ -413,10 +414,12 @@ export function lastroPillars(state: FinanceState, asOf: ISODate): Pillar[] {
     const m = monthKey(addMonths(asOf, -i));
     if (state.transactions.some((t) => t.type === "investment" && t.date <= asOf && t.date.startsWith(m))) monthsWithContribution++;
   }
-  const invest = 0.6 * (monthsWithContribution / 6) + 0.4 * clamp(b.investments / (6 * state.user.monthlyIncome));
+  // A new account may not have told us its income yet; avoid dividing by zero.
+  const income = Math.max(state.user.monthlyIncome, 1);
+  const invest = 0.6 * (monthsWithContribution / 6) + 0.4 * clamp(b.investments / (6 * income));
 
   const flow = clamp(proj.savingsRate / 0.3);
-  const debt = 1 - clamp(b.liabilities / (2 * state.user.monthlyIncome));
+  const debt = 1 - clamp(b.liabilities / (2 * income));
 
   const mo = (v: number) => formatNumber(v, 1);
   return [
@@ -512,7 +515,11 @@ export function pulse(state: FinanceState, asOf: ISODate) {
   const diff = round2(weekdayAvg - variableToday);
   const wd = weekdayName(asOf);
   let insight: string;
-  if (today.length === 0) insight = `Nada registrado ainda hoje. Sua ${wd.replace("-feira", "")} costuma custar ${formatBRL(weekdayAvg, { cents: false })}.`;
+  if (today.length === 0)
+    insight =
+      weekdayAvg > 0
+        ? `Nada registrado ainda hoje. Sua ${wd.replace("-feira", "")} costuma custar ${formatBRL(weekdayAvg, { cents: false })}.`
+        : "Nada registrado ainda hoje.";
   else if (diff > 10) insight = `Hoje você gastou ${formatBRL(diff, { cents: false })} a menos que sua média de ${wd}.`;
   else if (diff < -10) insight = `Hoje passou ${formatBRL(-diff, { cents: false })} da sua média de ${wd}. Amanhã equilibra.`;
   else insight = `Hoje está no seu ritmo normal de ${wd}.`;
@@ -546,7 +553,7 @@ export function netWorthChange(state: FinanceState, asOf: ISODate) {
   const now = series[series.length - 1].value;
   const prev = series.length > 1 ? series[series.length - 2].value : now;
   const yearAgo = series[0].value;
-  const record = series.slice(0, -1).every((p) => p.value < now);
+  const record = series.length > 1 && now > 0 && series.slice(0, -1).every((p) => p.value < now);
   return { now, monthDelta: round2(now - prev), yearDelta: round2(now - yearAgo), record };
 }
 
@@ -556,6 +563,23 @@ export function netWorthChange(state: FinanceState, asOf: ISODate) {
 
 export function insights(state: FinanceState, asOf: ISODate): FinancialInsight[] {
   const out: FinancialInsight[] = [];
+  if (!state.transactions.some((t) => t.date <= asOf)) {
+    return [
+      {
+        id: "welcome",
+        tone: "neutral",
+        title: "Seu mês começa aqui.",
+        body: "Registre seu primeiro gasto e o Lastro começa a entender seu ritmo.",
+      },
+      {
+        id: "welcome-budget",
+        tone: "neutral",
+        title: "Defina um orçamento para a categoria em que você mais gasta.",
+        body: "É o jeito mais rápido de saber quanto dá para gastar por dia.",
+        action: { label: "Criar orçamento", href: "/orcamentos" },
+      },
+    ];
+  }
   const now = monthSummary(state, asOf);
   const then = monthSummary(state, sameDayLastMonth(asOf));
   const proj = projectMonth(state, asOf);

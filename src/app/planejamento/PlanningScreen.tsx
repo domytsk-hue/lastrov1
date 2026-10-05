@@ -46,6 +46,17 @@ export function PlanningScreen() {
     <>
       <PageHeader eyebrow={capitalize(formatMonthYear(today))} title="Plano do mês" action={<Button size="sm" variant="secondary" onClick={() => setEditing(true)}><Pencil className="size-4" /> Ajustar</Button>} />
 
+      {plan.income <= 0 && (
+        <div className="card mb-6 flex flex-wrap items-center justify-between gap-4 p-5">
+          <div>
+            <p className="text-[15px] font-semibold">Comece pela sua renda mensal.</p>
+            <p className="text-[13px] text-soft">Com ela, o Lastro desenha para onde vai cada real do mês.</p>
+          </div>
+          <Button size="sm" onClick={() => setEditing(true)}>
+            Informar renda
+          </Button>
+        </div>
+      )}
       <section className="card-raised mb-6 p-5 sm:p-7" aria-label="Para onde vai sua renda">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>

@@ -275,3 +275,27 @@ export function createDemoState(today: ISODate): FinanceState {
     ],
   };
 }
+
+/**
+ * A fresh account: same structure as the demo (accounts, lessons) but no history,
+ * so the app starts with guided empty states instead of someone else's money.
+ */
+export function createEmptyState(today: ISODate, name: string): FinanceState {
+  const demo = createDemoState(today);
+  return {
+    version: STATE_VERSION,
+    user: { name, monthlyIncome: 0, objective: "organize", memberSince: today },
+    accounts: demo.accounts.map((a) => ({ ...a, openingBalance: 0 })),
+    transactions: [],
+    budgets: [],
+    goals: [],
+    investments: [],
+    assets: [],
+    liabilities: [],
+    reserve: { accountId: ACC.reserve, monthlyCost: 0, targetMonths: 6 },
+    plan: { investments: 0, goals: 0 },
+    netWorthHistory: [],
+    milestones: [],
+    lessons: demo.lessons,
+  };
+}

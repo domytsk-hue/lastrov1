@@ -102,6 +102,24 @@ export function BudgetSnapshot({ className }: { className?: string }) {
   const remaining = variable.reduce((s, b) => s + Math.max(0, b.remaining), 0);
   const daily = variable.reduce((s, b) => s + b.dailyAllowance, 0);
 
+  if (list.length === 0) {
+    return (
+      <section aria-labelledby="budget-snap" className={className}>
+        <SectionHeader title="Orçamento do mês" />
+        <Link href="/orcamentos" className="card group flex items-center gap-4 p-5 hover:bg-surface-2">
+          <span className="grid size-11 shrink-0 place-items-center rounded-[14px] bg-purple/20 text-purple-light">
+            <Plus className="size-5" />
+          </span>
+          <span className="flex-1">
+            <span className="block text-[15px] font-semibold">Crie seu primeiro orçamento</span>
+            <span className="text-[13px] text-soft">O Lastro mostra quanto dá para gastar por dia.</span>
+          </span>
+          <ArrowRight className="size-4 text-muted group-hover:text-off" />
+        </Link>
+      </section>
+    );
+  }
+
   return (
     <section aria-labelledby="budget-snap" className={className}>
       <SectionHeader title="Orçamento do mês" href="/orcamentos" />

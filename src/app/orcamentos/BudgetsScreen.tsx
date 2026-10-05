@@ -11,7 +11,7 @@ import { useFinance } from "@/store/finance-store";
 import { useUI } from "@/store/ui-store";
 import { BudgetCard, budgetAdvice } from "@/components/budgets/BudgetCard";
 import { BottomSheet } from "@/components/ui/BottomSheet";
-import { CategoryChip, Button, Field, PageHeader, STATE_COLOR, inputClass } from "@/components/ui/primitives";
+import { CategoryChip, Button, EmptyState, Field, PageHeader, STATE_COLOR, inputClass } from "@/components/ui/primitives";
 import { Money, MoneyValue } from "@/components/ui/MoneyValue";
 import { ProgressRing } from "@/components/ui/Progress";
 import { useToast } from "@/components/ui/Toast";
@@ -38,6 +38,15 @@ export function BudgetsScreen() {
     <>
       <PageHeader eyebrow={capitalize(formatMonthYear(today))} title="Orçamentos" />
 
+      {list.length === 0 ? (
+        <section className="card mb-6">
+          <EmptyState
+            title="Orçamento sem planilha."
+            body="Escolha uma categoria e um limite. O Lastro mostra quanto dá para gastar por dia e avisa com calma quando algo pede atenção."
+            action={<Button onClick={() => setAdding(true)}>Criar primeiro orçamento</Button>}
+          />
+        </section>
+      ) : (
       <section className="card-raised mb-6 grid gap-6 p-5 sm:p-6 lg:grid-cols-[auto_1fr_auto] lg:items-center">
         <div className="flex items-center gap-5">
           <ProgressRing value={totalLimit ? totalSpent / totalLimit : 0} size={96} stroke={8} color="var(--color-purple-light)">
@@ -73,12 +82,13 @@ export function BudgetsScreen() {
             ))}
         </ul>
       </section>
+      )}
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {sorted.map((b) => (
           <BudgetCard key={b.categoryId} b={b} onClick={() => setEditing(b.categoryId)} />
         ))}
-        {unbudgeted.length > 0 && (
+        {unbudgeted.length > 0 && list.length > 0 && (
           <button
             onClick={() => setAdding(true)}
             className="pressable flex min-h-[180px] flex-col items-center justify-center gap-2 rounded-[24px] border border-dashed border-white/10 text-soft hover:border-white/20 hover:text-off"
