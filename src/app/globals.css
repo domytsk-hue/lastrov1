@@ -1,0 +1,174 @@
+@import "tailwindcss";
+
+/* ------------------------------------------------------------------
+   Lastro design tokens
+   Dark, graphite base with controlled colour accents.
+   ------------------------------------------------------------------ */
+@theme {
+  /* Base */
+  --color-ink: #050607;
+  --color-surface-1: #0b0d10;
+  --color-surface-2: #11151a;
+  --color-surface-3: #171c22;
+  --color-graphite: #252a31;
+  --color-muted: #69717d;
+  --color-soft: #aeb4bd;
+  --color-off: #f4f6f8;
+
+  /* Accents + light companions */
+  --color-green: #00d99b;
+  --color-green-light: #6cf0c6;
+  --color-green-deep: #00473a;
+  --color-purple: #6637f5;
+  --color-purple-light: #8b6bff;
+  --color-purple-deep: #22145a;
+  --color-coral: #ff455d;
+  --color-coral-light: #ff8a9a;
+  --color-blue: #2563f5;
+  --color-blue-light: #5b8cff;
+  --color-blue-deep: #0b1d52;
+  --color-yellow: #ffc234;
+  --color-yellow-light: #ffd979;
+  --color-teal: #4fe3c1;
+
+  /* Type */
+  --font-display: "Telegraf", var(--font-manrope), "SF Pro Display", -apple-system, system-ui, sans-serif;
+  --font-sans: "SF Pro Text", -apple-system, BlinkMacSystemFont, var(--font-inter), system-ui, sans-serif;
+
+  /* Radius */
+  --radius-card: 24px;
+  --radius-card-lg: 28px;
+  --radius-control: 16px;
+
+  /* Motion */
+  --ease-lastro: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+:root {
+  color-scheme: dark;
+  --hairline: rgba(255, 255, 255, 0.06);
+  --hairline-strong: rgba(255, 255, 255, 0.1);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+html {
+  background: var(--color-ink);
+  -webkit-tap-highlight-color: transparent;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  background: var(--color-ink);
+  color: var(--color-off);
+  font-family: var(--font-sans);
+  font-feature-settings: "tnum" 0;
+  min-height: 100dvh;
+  overscroll-behavior-y: none;
+}
+
+/* Atmosphere behind everything: two very soft light sources. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    radial-gradient(60rem 40rem at 85% -10%, rgba(37, 99, 245, 0.13), transparent 60%),
+    radial-gradient(40rem 30rem at -10% 30%, rgba(102, 55, 245, 0.07), transparent 60%);
+}
+
+::selection {
+  background: rgba(0, 217, 155, 0.3);
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-green);
+  outline-offset: 2px;
+  border-radius: 12px;
+}
+
+@utility tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+@utility hairline {
+  border: 1px solid var(--hairline);
+}
+
+@utility card {
+  background: var(--color-surface-1);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-card);
+}
+
+@utility card-raised {
+  background: linear-gradient(180deg, #12161c 0%, #0d1014 100%);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-card);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 24px 48px -24px rgba(0, 0, 0, 0.6);
+}
+
+@utility eyebrow {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: var(--color-muted);
+}
+
+@utility no-scrollbar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@utility pressable {
+  transition: transform 160ms var(--ease-lastro), background-color 160ms, opacity 160ms;
+  &:active {
+    transform: scale(0.97);
+  }
+}
+
+@keyframes lastro-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.35;
+    transform: scale(0.75);
+  }
+}
+
+@keyframes lastro-shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.live-dot {
+  animation: lastro-pulse 2.4s ease-in-out infinite;
+}
+
+.skeleton {
+  background: linear-gradient(90deg, #11151a 25%, #1a1f26 50%, #11151a 75%);
+  background-size: 200% 100%;
+  animation: lastro-shimmer 1.6s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
