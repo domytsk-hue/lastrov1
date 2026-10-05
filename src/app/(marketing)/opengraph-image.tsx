@@ -1,8 +1,12 @@
 import { ImageResponse } from "next/og";
+import { annularSector } from "@/lib/geometry";
 
 export const alt = "Lastro — Sua vida financeira, finalmente visível";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
+
+/** The Lastro mark's segments: center angle, span, inner radius (see LastroMark). */
+const MARK: [number, number, number][] = [[180, 62, 9.7], [118.5, 51, 10.6], [241.5, 51, 10.6], [62, 52, 10.8], [298, 52, 10.8], [0, 58, 10.9]];
 
 /** Social preview in the Lastro palette (tokens: ice, electric, deep, mint). */
 export default function OpengraphImage() {
@@ -22,7 +26,11 @@ export default function OpengraphImage() {
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
-          <div style={{ width: 44, height: 44, borderRadius: 999, border: "9px solid white", borderBottomColor: "#18E0AE" }} />
+          <svg width="56" height="56" viewBox="0 0 32 32">
+            {MARK.map(([at, span, r0], i) => (
+              <path key={at} d={annularSector(16, 16, r0 + 0.5, 13.5, at - span / 2 + 2.4, at + span / 2 - 2.4)} fill={i === 0 ? "#00E4B4" : "#ffffff"} stroke={i === 0 ? "#00E4B4" : "#ffffff"} strokeWidth={1} strokeLinejoin="round" />
+            ))}
+          </svg>
           <div style={{ fontSize: 44, fontWeight: 700, letterSpacing: -1.5 }}>lastro</div>
         </div>
         <div style={{ display: "flex", flexDirection: "column" }}>

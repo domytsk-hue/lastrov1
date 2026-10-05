@@ -46,7 +46,19 @@ export function MarketingFooter() {
           </ul>
         </nav>
       </div>
-      <p className="mx-auto mt-10 max-w-[1160px] text-[13px] text-ink-400">© {new Date().getFullYear()} Lastro</p>
+      <div className="mx-auto mt-10 flex max-w-[1160px] flex-col-reverse gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-[13px] text-ink-400">© {new Date().getFullYear()} Lastro</p>
+        <p className="flex items-center gap-2.5 text-[12px] font-semibold tracking-[0.12em] text-ink-500 uppercase">
+          Produced by
+          {/* The KLA SB artwork is white on transparent; used as a mask so it takes the footer's ink. */}
+          <span
+            role="img"
+            aria-label="KLA SB"
+            className="inline-block h-[18px] w-[73px] bg-ink-900"
+            style={{ maskImage: "url(/brand/klaesb.png)", WebkitMaskImage: "url(/brand/klaesb.png)", maskSize: "contain", WebkitMaskSize: "contain", maskRepeat: "no-repeat", WebkitMaskRepeat: "no-repeat" }}
+          />
+        </p>
+      </div>
     </footer>
   );
 }
