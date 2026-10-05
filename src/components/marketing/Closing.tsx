@@ -1,7 +1,8 @@
 "use client";
 
 import { motion, useReducedMotion } from "framer-motion";
-import { ArrowRight, KeyRound, Landmark, MonitorSmartphone, Trash2 } from "lucide-react";
+import { ArrowRight, BadgePercent, Check, KeyRound, Landmark, MonitorSmartphone, Trash2 } from "lucide-react";
+import { cn } from "@/lib/cn";
 import { formatNumber } from "@/lib/format";
 import { AUTH_ROUTES } from "@/config/routes";
 import { ease } from "@/design-system/motion";
@@ -138,52 +139,121 @@ export function TrustSection() {
 }
 
 /* ------------------------------------------------------------------ */
-/* Plans — architecture ready, no invented prices                      */
+/* Plans — lifetime in front, monthly behind it as the reference price */
 /* ------------------------------------------------------------------ */
 
-export interface Plan {
-  name: string;
-  price: number;
-  period: "mês" | "ano";
-  features: string[];
-  highlighted?: boolean;
+export const PRICING = {
+  monthly: 19.9,
+  lifetime: 99.9,
+} as const;
+const YEARLY = Math.round(PRICING.monthly * 12 * 100) / 100; // 238,80
+const SAVING = Math.round((YEARLY - PRICING.lifetime) * 100) / 100; // 138,90
+
+const INCLUDED = ["Orçamentos, metas e reserva", "Patrimônio e investimentos", "Aulas no momento certo"];
+
+/** "R$ 99" + ",90" — the product's money rhythm, big units and small cents. */
+function Price({ value, className, cents = "text-[0.42em]" }: { value: number; className?: string; cents?: string }) {
+  const [int, dec] = formatNumber(value, 2).split(",");
+  return (
+    <span className={cn("font-display font-semibold tracking-[-0.045em]", className)}>
+      <span className="mr-1 align-top text-[0.36em] font-medium opacity-70">R$</span>
+      {int}
+      <span className={cn("align-top", cents)}>,{dec}</span>
+    </span>
+  );
 }
 
-/** Empty until pricing is decided. With plans, the section renders them; without, an honest CTA. */
-export const PLANS: Plan[] = [];
+export function PricingSection() {
+  const reduce = useReducedMotion();
+  const appear = (delay: number, from: { x?: number; y?: number; rotate?: number }) =>
+    ({
+      initial: reduce ? false : { opacity: 0, ...from },
+      whileInView: { opacity: 1, x: 0, y: 0 },
+      viewport: { once: true, amount: 0.35 },
+      transition: { duration: 0.8, ease: ease.out, delay },
+    }) as const;
 
-export function PricingSection({ plans = PLANS }: { plans?: Plan[] }) {
   return (
     <Section id="planos" labelledBy="plans-title" className="py-20 lg:py-28">
-      {plans.length === 0 ? (
-        <div className="surface-light mx-auto max-w-[880px] rounded-[48px] px-6 py-14 text-center sm:px-12">
-          <SectionHeading id="plans-title" align="center" kicker="Planos" title="Planos em breve." lead="Por enquanto, criar sua conta não pede cartão de crédito. Comece agora e acompanhe as novidades por aqui." />
-          <Rise className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row" delay={0.2}>
-            <PrimaryCta />
-            <SecondaryLink href={AUTH_ROUTES.login}>Ver com dados de exemplo</SecondaryLink>
-          </Rise>
-        </div>
-      ) : (
-        <>
-          <SectionHeading id="plans-title" align="center" kicker="Planos" title="Escolha seu plano." />
-          <ul className="mx-auto mt-12 grid max-w-[960px] gap-4 md:grid-cols-2">
-            {plans.map((p) => (
-              <li key={p.name} className={p.highlighted ? "surface-hero rounded-[40px] p-8" : "surface-light rounded-[40px] p-8"}>
-                <p className="font-display text-[22px] font-semibold">{p.name}</p>
-                <p className="mt-4 font-display text-[48px] font-semibold tracking-[-0.04em]">
-                  R$ {formatNumber(p.price, 2)}
-                  <span className="text-[16px] font-medium opacity-70">/{p.period}</span>
+      <SectionHeading
+        id="plans-title"
+        align="center"
+        kicker="Planos"
+        title="Pague uma vez. Fique para sempre."
+        lead="Os dois planos têm tudo do Lastro. A diferença é quanto você paga por isso."
+      />
+
+      <div className="relative mx-auto mt-14 flex max-w-[860px] flex-col items-center lg:mt-16 lg:flex-row lg:items-center lg:justify-center">
+        {/* Monthly — behind, tilted, still fully readable: it is the reference that makes the saving obvious */}
+        <motion.article
+          {...appear(0.05, { x: -24, y: 12 })}
+          aria-labelledby="plan-monthly"
+          className="relative z-0 w-full max-w-[400px] lg:w-[360px] lg:translate-x-12"
+        >
+          <div className="surface-light origin-bottom rounded-[36px] p-6 pb-14 opacity-95 max-lg:scale-[0.94] sm:p-7 sm:pb-14 lg:-rotate-3 lg:pr-20 lg:pb-7">
+            <p id="plan-monthly" className="text-[13px] font-bold tracking-[0.14em] text-ink-500 uppercase">
+              Mensal
+            </p>
+            <p className="mt-3 text-ink-900">
+              <Price value={PRICING.monthly} className="text-[48px] leading-none" />
+              <span className="ml-1 text-[16px] font-medium text-ink-500">/mês</span>
+            </p>
+            <p className="mt-5 inline-flex flex-col rounded-[20px] bg-white px-4 py-3 shadow-[0_10px_24px_-18px_rgba(22,80,180,0.6)]">
+              <span className="text-[12px] font-semibold tracking-[0.1em] text-ink-500 uppercase">Em 12 meses</span>
+              <span className="font-display text-[26px] leading-tight font-semibold tracking-[-0.03em] text-ink-900">
+                R$ {formatNumber(YEARLY, 2)}
+                <span className="text-[15px] font-medium text-ink-500"> por ano</span>
+              </span>
+            </p>
+            <p className="mt-4 text-[14px] text-ink-700">Cobrança todo mês, enquanto você usar.</p>
+          </div>
+        </motion.article>
+
+        {/* Lifetime — in front, the priority */}
+        <motion.article
+          {...appear(0.18, { y: 28 })}
+          aria-labelledby="plan-lifetime"
+          className="relative z-10 -mt-10 w-full max-w-[420px] lg:mt-0 lg:-ml-6 lg:w-[420px]"
+        >
+          <div className="surface-hero relative overflow-hidden rounded-[40px] p-7 shadow-[0_40px_80px_-30px_rgba(22,80,180,0.75)] sm:p-8">
+            <div aria-hidden className="pointer-events-none absolute -top-24 -right-20 size-64 rounded-full bg-white/15 blur-2xl" />
+            <div className="relative">
+              <div className="flex items-center justify-between gap-3">
+                <p id="plan-lifetime" className="text-[13px] font-bold tracking-[0.14em] text-white/80 uppercase">
+                  Vitalício
                 </p>
-                <ul className="mt-6 flex flex-col gap-2 text-[15px]">
-                  {p.features.map((f) => (
-                    <li key={f}>{f}</li>
-                  ))}
-                </ul>
-              </li>
-            ))}
-          </ul>
-        </>
-      )}
+                <span className="rounded-full bg-mint px-3 py-1 text-[12px] font-bold text-midnight">Mais vantajoso</span>
+              </div>
+
+              <p className="mt-5 inline-flex rounded-full bg-midnight/40 px-3 py-1 text-[15px] font-semibold text-white/90">
+                <s className="decoration-white/90 decoration-[1.5px]" aria-label={`De R$ ${formatNumber(YEARLY, 2)} por ano`}>R$ {formatNumber(YEARLY, 2)}/ano</s>
+              </p>
+              <p className="mt-1 text-white">
+                <Price value={PRICING.lifetime} className="text-[72px] leading-[0.95] sm:text-[80px]" />
+              </p>
+              <p className="mt-2 text-[16px] font-semibold text-white">Pagamento único · acesso para sempre</p>
+
+              <p className="mt-5 flex items-center gap-2 rounded-[20px] bg-midnight/35 px-4 py-3 text-[15px] leading-snug text-white">
+                <BadgePercent className="size-5 shrink-0 text-mint" aria-hidden />
+                <span>
+                  Economize <strong className="font-semibold text-mint">R$ {formatNumber(SAVING, 2)}</strong> já no primeiro ano — e nunca mais pague.
+                </span>
+              </p>
+
+              <ul className="mt-6 flex flex-col gap-2.5">
+                {INCLUDED.map((f) => (
+                  <li key={f} className="flex items-center gap-2.5 text-[15px] text-white/90">
+                    <Check className="size-4 shrink-0 text-mint" strokeWidth={3} aria-hidden />
+                    {f}
+                  </li>
+                ))}
+              </ul>
+
+              <PrimaryCta label="Garantir o vitalício" tone="white" className="mt-8 w-full" />
+            </div>
+          </div>
+        </motion.article>
+      </div>
     </Section>
   );
 }
