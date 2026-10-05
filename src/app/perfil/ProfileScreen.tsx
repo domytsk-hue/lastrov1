@@ -1,11 +1,12 @@
 "use client";
 
-import { AtSign, ChevronRight, Eye, Fingerprint, KeyRound, Landmark, LogOut, Phone, RotateCcw, Shapes, Target } from "lucide-react";
+import { AtSign, Camera, ChevronRight, Loader2, Eye, Fingerprint, KeyRound, Landmark, LogOut, Phone, RotateCcw, Shapes, Target } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { EXPENSE_CATEGORIES, INCOME_CATEGORIES } from "@/data/categories";
 import { formatIdentifier } from "@/lib/auth";
 import { evaluate } from "@/lib/calculator";
+import { photoToAvatar } from "@/lib/image";
 import { cn } from "@/lib/cn";
 import { lastroLevel, lastroScore, streak } from "@/lib/finance";
 import { formatMonthYear, formatNumber } from "@/lib/format";
@@ -14,6 +15,7 @@ import { useAuth } from "@/store/auth-store";
 import { useFinance } from "@/store/finance-store";
 import { useUI } from "@/store/ui-store";
 import { LastroMark } from "@/components/shell/LastroMark";
+import { Avatar } from "@/components/ui/Avatar";
 import { BottomSheet } from "@/components/ui/BottomSheet";
 import { CategoryIcon } from "@/components/ui/CategoryIcon";
 import { Button, Field, PageHeader, inputClass } from "@/components/ui/primitives";
@@ -42,11 +44,14 @@ export function ProfileScreen() {
     <>
       <PageHeader eyebrow="Perfil" title={state.user.name} />
 
-      <section className="surface-light mb-8 flex items-center gap-5 rounded-[36px] p-6">
-        <LastroMark size={64} progress={score / 100} />
-        <div className="flex-1">
-          <p className="text-[13px] text-ink-500">Lastro {score} · Nível {lastroLevel(score).name}</p>
-          <p className="mt-1 text-[14px] text-ink-400">
+      <section className="surface-light mb-8 flex flex-col gap-5 rounded-[36px] p-6 sm:flex-row sm:items-center">
+        <PhotoPicker />
+        <div className="min-w-0 flex-1">
+          <p className="flex items-center gap-2 text-[15px] font-semibold text-ink-900">
+            <LastroMark size={22} progress={score / 100} />
+            Lastro {score} · {lastroLevel(score).name}
+          </p>
+          <p className="mt-1 text-[14px] text-ink-500">
             No Lastro desde {formatMonthYear(state.user.memberSince)} · {s} {s === 1 ? "dia" : "dias"} seguidos
           </p>
         </div>
@@ -234,6 +239,71 @@ function ProfileForm({ onDone }: { onDone: () => void }) {
       >
         Salvar
       </Button>
+    </div>
+  );
+}
+
+/** Tap the avatar to choose a photo (camera or gallery on mobile). It's cropped and shrunk on the device. */
+function PhotoPicker() {
+  const { state, dispatch } = useFinance();
+  const toast = useToast();
+  const input = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState(false);
+  const photo = state.user.photo;
+
+  const onFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    setBusy(true);
+    try {
+      const dataUrl = await photoToAvatar(file);
+      dispatch({ type: "user/set", patch: { photo: dataUrl } });
+      toast.show({ title: photo ? "Foto atualizada" : "Foto adicionada" });
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : "";
+      toast.show({
+        title: "Não deu para usar essa imagem",
+        body: reason === "too-large" ? "Escolha uma foto com menos de 15 MB." : reason === "not-image" ? "Escolha um arquivo de imagem." : "Tente outra foto.",
+        tone: "attention",
+      });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-4">
+      <button
+        type="button"
+        onClick={() => input.current?.click()}
+        disabled={busy}
+        className="group relative rounded-full transition-transform active:scale-95 disabled:opacity-70"
+        aria-label={photo ? "Trocar foto de perfil" : "Adicionar foto de perfil"}
+      >
+        <Avatar name={state.user.name} photo={photo} size={88} />
+        <span className="absolute -right-1 -bottom-1 grid size-9 place-items-center rounded-full bg-midnight text-white shadow-[0_6px_14px_-6px_rgba(7,26,59,0.8)] ring-4 ring-white transition-transform group-hover:scale-105">
+          {busy ? <Loader2 className="size-4 animate-spin" /> : <Camera className="size-4" />}
+        </span>
+      </button>
+      <div className="flex flex-col items-start gap-1">
+        <button type="button" onClick={() => input.current?.click()} disabled={busy} className="text-[15px] font-semibold text-electric hover:underline">
+          {photo ? "Trocar foto" : "Adicionar foto"}
+        </button>
+        {photo && (
+          <button
+            type="button"
+            onClick={() => {
+              dispatch({ type: "user/set", patch: { photo: undefined } });
+              toast.show({ title: "Foto removida", tone: "neutral", action: { label: "Desfazer", onClick: () => dispatch({ type: "user/set", patch: { photo } }) } });
+            }}
+            className="text-[14px] font-medium text-ink-500 hover:text-rose-ink"
+          >
+            Remover
+          </button>
+        )}
+      </div>
+      <input ref={input} type="file" accept="image/*" className="sr-only" tabIndex={-1} aria-hidden onChange={onFile} />
     </div>
   );
 }

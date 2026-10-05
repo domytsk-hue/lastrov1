@@ -168,6 +168,8 @@ export interface Milestone {
 
 export interface User {
   name: string;
+  /** Profile photo as a small square JPEG data URL (resized on the device). */
+  photo?: string;
   monthlyIncome: number;
   objective:
     | "organize"

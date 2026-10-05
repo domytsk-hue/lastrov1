@@ -9,6 +9,7 @@ import { spring } from "@/lib/motion";
 import { useFinance } from "@/store/finance-store";
 import { useUI } from "@/store/ui-store";
 import { TactileButton } from "@/components/surfaces/Surface";
+import { Avatar } from "@/components/ui/Avatar";
 import { LastroMark } from "./LastroMark";
 
 interface NavItem {
@@ -79,12 +80,9 @@ export function FloatingNavDesktop() {
           href="/perfil"
           aria-current={profileActive ? "page" : undefined}
           aria-label="Perfil"
-          className={cn(
-            "grid size-12 place-items-center rounded-full font-display text-[16px] font-semibold transition-shadow",
-            profileActive ? "bg-midnight text-white" : "bg-gradient-to-br from-sky to-electric text-white",
-          )}
+          className={cn("grid size-12 place-items-center rounded-full transition-shadow", profileActive && "ring-2 ring-midnight ring-offset-2 ring-offset-white")}
         >
-          {state.user.name.charAt(0)}
+          <Avatar name={state.user.name} photo={state.user.photo} size={44} />
         </Link>
         <TactileButton
           magnetic

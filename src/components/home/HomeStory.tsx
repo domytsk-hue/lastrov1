@@ -10,6 +10,7 @@ import { formatNumber, greeting, parseISODate } from "@/lib/format";
 import { useFinance } from "@/store/finance-store";
 import { useUI } from "@/store/ui-store";
 import { NetWorthChart } from "@/components/charts/NetWorthChart";
+import { Avatar } from "@/components/ui/Avatar";
 import { GoalSurface } from "@/components/goals/GoalSurface";
 import { ProtectionLayers } from "@/components/reserve/ProtectionLayers";
 import { TransactionItem } from "@/components/transactions/TransactionItem";
@@ -41,10 +42,10 @@ export function Greeting() {
         )}
         <Link
           href="/perfil"
-          className="grid size-11 place-items-center rounded-full bg-gradient-to-br from-sky to-electric font-display text-[17px] font-semibold text-white shadow-[0_10px_24px_-10px_rgba(54,120,245,0.8)] lg:hidden"
+          className="rounded-full lg:hidden"
           aria-label="Perfil"
         >
-          {state.user.name.charAt(0)}
+          <Avatar name={state.user.name} photo={state.user.photo} size={44} />
         </Link>
       </div>
     </header>
