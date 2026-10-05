@@ -25,7 +25,8 @@ export function LastroMark({
   size = 28,
   loading = false,
   progress,
-  accent = "var(--color-green)",
+  accent = "var(--color-mint)",
+  tone = "dark",
   className,
   title = "Lastro",
 }: {
@@ -34,6 +35,8 @@ export function LastroMark({
   /** 0..1 — fills segments bottom-up, like the score. */
   progress?: number;
   accent?: string;
+  /** "dark" for light backgrounds (default), "light" for blue/navy surfaces. */
+  tone?: "dark" | "light";
   className?: string;
   title?: string;
 }) {
@@ -44,7 +47,9 @@ export function LastroMark({
       {SEGMENTS.map((s, i) => {
         const d = annularSector(16, 16, s.r0, R1, s.at - SPAN / 2, s.at + SPAN / 2);
         const on = i < filled;
-        const fill = i === 0 ? accent : on ? "var(--color-off)" : "rgba(255,255,255,0.14)";
+        const ink = tone === "dark" ? "var(--color-midnight)" : "#ffffff";
+        const off = tone === "dark" ? "rgba(7,26,59,0.14)" : "rgba(255,255,255,0.22)";
+        const fill = i === 0 ? accent : on ? ink : off;
         if (loading && !reduce) {
           return (
             <motion.path
@@ -77,7 +82,7 @@ export function LastroWordmark({ className }: { className?: string }) {
 /** Full-screen loader, shown while local data hydrates. */
 export function LastroLoader() {
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-ink" aria-busy="true" aria-label="Carregando Lastro">
+    <div className="fixed inset-0 z-50 grid place-items-center bg-env" aria-busy="true" aria-label="Carregando Lastro">
       <LastroMark size={56} loading />
     </div>
   );

@@ -59,14 +59,14 @@ function ReserveLesson({ onClose }: { onClose: () => void }) {
     <div className="flex min-h-[360px] flex-col">
       <div className="mb-6 flex gap-1.5" aria-hidden>
         {[...steps, null].map((_, i) => (
-          <span key={i} className={cn("h-1 flex-1 rounded-full transition-colors", i <= step ? "bg-purple-light" : "bg-white/10")} />
+          <span key={i} className={cn("h-1 flex-1 rounded-full transition-colors", i <= step ? "bg-electric" : "bg-ink-900/10")} />
         ))}
       </div>
       <AnimatePresence mode="wait">
         {!done ? (
           <motion.div key={step} initial={{ opacity: 0, x: 16 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -16 }} transition={{ duration: 0.25 }} className="flex flex-1 flex-col">
             <p className="font-display text-[24px] leading-tight font-semibold tracking-[-0.02em]">{steps[step].title}</p>
-            <p className="mt-3 text-[15px] leading-relaxed text-soft">{steps[step].body}</p>
+            <p className="mt-3 text-[15px] leading-relaxed text-ink-700">{steps[step].body}</p>
             {steps[step].choice && (
               <div className="mt-5 flex flex-col gap-2" role="radiogroup" aria-label="Tipo de renda">
                 {(
@@ -81,13 +81,13 @@ function ReserveLesson({ onClose }: { onClose: () => void }) {
                     role="radio"
                     aria-checked={profile === id}
                     onClick={() => setProfile(id)}
-                    className={cn("pressable flex items-center justify-between rounded-[16px] p-4 text-left", profile === id ? "bg-purple/25 ring-1 ring-purple-light" : "bg-white/[0.04]")}
+                    className={cn("flex items-center justify-between rounded-[24px] p-4 text-left transition-transform active:scale-[0.98]", profile === id ? "bg-midnight text-white" : "bg-white text-ink-900 shadow-[0_6px_16px_-12px_rgba(22,80,180,0.5)]")}
                   >
                     <span>
                       <span className="block text-[15px] font-semibold">{label}</span>
-                      <span className="text-[13px] text-soft">{hint}</span>
+                      <span className={cn("text-[14px]", profile === id ? "text-white/70" : "text-ink-500")}>{hint}</span>
                     </span>
-                    {profile === id && <Check className="size-5 text-purple-light" />}
+                    {profile === id && <Check className="size-5 text-mint" />}
                   </button>
                 ))}
               </div>
@@ -100,14 +100,14 @@ function ReserveLesson({ onClose }: { onClose: () => void }) {
           </motion.div>
         ) : (
           <motion.div key="result" initial={{ opacity: 0, scale: 0.97 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.3 }} className="flex flex-1 flex-col">
-            <p className="eyebrow !text-purple-light">Sua reserva ideal</p>
+            <p className="eyebrow text-electric">Sua reserva ideal</p>
             <p className="mt-2 font-display text-[44px] leading-none font-semibold tracking-[-0.04em] tabular">{formatBRL(target, { cents: false })}</p>
-            <p className="mt-3 text-[15px] text-soft">
+            <p className="mt-3 text-[16px] text-ink-700">
               {months} meses × {formatBRL(Math.round(essential / 50) * 50, { cents: false })} de custo essencial.
             </p>
-            <div className="mt-5 rounded-[18px] bg-white/[0.04] p-4">
+            <div className="mt-5 rounded-[24px] bg-white p-4">
               <p className="text-[15px] leading-snug">
-                Você já tem <strong className="text-green">{formatBRL(r.balance, { cents: false })}</strong> — {formatNumber(Math.min(100, (r.balance / Math.max(1, target)) * 100), 0)}% do caminho.
+                Você já tem <strong className="text-mint-ink">{formatBRL(r.balance, { cents: false })}</strong> — {formatNumber(Math.min(100, (r.balance / Math.max(1, target)) * 100), 0)}% do caminho.
               </p>
             </div>
             <div className="mt-auto flex flex-col gap-2 pt-6">
@@ -121,7 +121,7 @@ function ReserveLesson({ onClose }: { onClose: () => void }) {
               >
                 Usar como minha meta
               </Button>
-              <Link href="/reserva" onClick={() => { dispatch({ type: "lesson/complete", id: "reserva-ideal" }); onClose(); }} className="flex h-12 items-center justify-center gap-1.5 text-[14px] font-semibold text-soft hover:text-off">
+              <Link href="/reserva" onClick={() => { dispatch({ type: "lesson/complete", id: "reserva-ideal" }); onClose(); }} className="flex h-12 items-center justify-center gap-1.5 text-[15px] font-semibold text-ink-700 hover:text-ink-900">
                 Ver minha reserva <ArrowRight className="size-4" />
               </Link>
             </div>

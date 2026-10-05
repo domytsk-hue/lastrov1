@@ -17,7 +17,20 @@ export interface ComposerRequest {
   text?: string;
 }
 
+/** A money particle flying from where an action happened to where it lands. */
+export interface Flow {
+  id: number;
+  text: string;
+  tone: "spend" | "gain" | "save";
+  from: { x: number; y: number };
+  /** CSS selector of the destination, e.g. [data-flow-target="balance"]. */
+  to: string;
+}
+
 interface UIContextValue {
+  flows: Flow[];
+  emitFlow: (f: Omit<Flow, "id">) => void;
+  endFlow: (id: number) => void;
   privacy: boolean;
   togglePrivacy: () => void;
   composer: ComposerRequest | null;
@@ -30,6 +43,9 @@ const UIContext = createContext<UIContextValue | null>(null);
 export function UIProvider({ children }: { children: React.ReactNode }) {
   const [privacy, setPrivacy] = useState(false);
   const [composer, setComposer] = useState<ComposerRequest | null>(null);
+  const [flows, setFlows] = useState<Flow[]>([]);
+  const emitFlow = useCallback((f: Omit<Flow, "id">) => setFlows((xs) => [...xs, { ...f, id: Date.now() + Math.random() }]), []);
+  const endFlow = useCallback((id: number) => setFlows((xs) => xs.filter((x) => x.id !== id)), []);
 
   useEffect(() => {
     try {
@@ -64,8 +80,8 @@ export function UIProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ privacy, togglePrivacy, composer, openComposer, closeComposer }),
-    [privacy, togglePrivacy, composer, openComposer, closeComposer],
+    () => ({ flows, emitFlow, endFlow, privacy, togglePrivacy, composer, openComposer, closeComposer }),
+    [flows, emitFlow, endFlow, privacy, togglePrivacy, composer, openComposer, closeComposer],
   );
   return <UIContext.Provider value={value}>{children}</UIContext.Provider>;
 }

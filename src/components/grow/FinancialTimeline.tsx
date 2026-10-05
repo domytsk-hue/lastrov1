@@ -44,7 +44,7 @@ export function FinancialTimeline({ series, milestones, record }: { series: NetW
   }, []);
 
   return (
-    <div ref={scroller} className="-mx-5 overflow-x-auto px-5 pb-2 no-scrollbar sm:-mx-6 sm:px-6" tabIndex={0} aria-label="Linha do tempo financeira">
+    <div ref={scroller} className="-mx-4 overflow-x-auto px-4 pb-2 no-scrollbar sm:-mx-6 sm:px-6" tabIndex={0} aria-label="Linha do tempo financeira">
       <ol className="flex min-w-max items-end gap-1">
         {stations.map((s, i) => (
           <li key={s.month} className="flex w-[92px] flex-col items-center">
@@ -57,32 +57,32 @@ export function FinancialTimeline({ series, milestones, record }: { series: NetW
                     key={m.id}
                     initial={reduce ? false : { opacity: 0, y: 6 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="rounded-[12px] bg-yellow/10 px-2 py-1.5 text-[11px] leading-tight font-medium text-yellow-light"
+                    className="rounded-[16px] bg-white px-2.5 py-2 text-[12px] leading-tight font-semibold text-ink-900 shadow-[0_8px_18px_-12px_rgba(22,80,180,0.5)]"
                   >
-                    <Icon className="mb-0.5 size-3.5 text-yellow" />
+                    <Icon className="mb-1 size-4 text-amber" />
                     {m.title}
                   </motion.div>
                 );
               })}
             </div>
             {/* the station bar */}
-            <div className="flex h-24 w-full items-end justify-center">
+            <div className="flex h-28 w-full items-end justify-center">
               <motion.div
-                className="w-10 rounded-t-[12px]"
+                className="w-11 rounded-full"
                 style={{
-                  background: s.isLast ? "linear-gradient(180deg,#00D99B,#00D99B33)" : `linear-gradient(180deg, rgba(91,140,255,${0.35 + s.h * 0.4}), rgba(91,140,255,0.05))`,
+                  background: s.isLast ? "linear-gradient(180deg,#18E0AE,#3678F5)" : `linear-gradient(180deg, rgba(54,120,245,${0.35 + s.h * 0.5}), rgba(140,203,255,0.35))`,
                 }}
                 initial={reduce ? false : { height: 0 }}
                 animate={{ height: `${s.h * 100}%` }}
                 transition={{ duration: 0.7, delay: reduce ? 0 : i * 0.03, ease: [0.22, 1, 0.36, 1] }}
               />
             </div>
-            <div className="w-full border-t border-white/10 pt-2 text-center">
-              <p className={`text-[11px] font-semibold tracking-[0.08em] uppercase ${s.isLast ? "text-green" : "text-muted"}`}>
+            <div className="w-full pt-3 text-center">
+              <p className={`text-[11px] font-semibold tracking-[0.08em] uppercase ${s.isLast ? "text-mint-ink" : "text-ink-400"}`}>
                 {s.isLast ? "Hoje" : monthName(s.month, true)}
-                {s.newYear && !s.isLast && <span className="ml-1 text-soft">{s.month.slice(2, 4)}</span>}
+                {s.newYear && !s.isLast && <span className="ml-1 text-ink-500">{s.month.slice(2, 4)}</span>}
               </p>
-              <p className="mt-0.5 text-[13px] font-semibold tabular text-off">{privacy ? "••••" : formatCompactBRL(s.value).replace("R$ ", "")}</p>
+              <p className="mt-0.5 text-[14px] font-semibold tabular text-ink-900">{privacy ? "••••" : formatCompactBRL(s.value).replace("R$ ", "")}</p>
             </div>
           </li>
         ))}

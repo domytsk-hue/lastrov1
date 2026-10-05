@@ -1,72 +1,75 @@
 "use client";
 
 import { motion, useReducedMotion } from "framer-motion";
-import { FinancialHero } from "@/components/home/FinancialHero";
-import { DailyPulse } from "@/components/home/DailyPulse";
-import { LastroScoreCard } from "@/components/home/LastroScore";
-import { BudgetSnapshot, GoalsStrip, HomeHeader, InsightCard, QuickActions, RecentTransactions } from "@/components/home/HomeSections";
-import { NetWorthCard } from "@/components/grow/NetWorthCard";
+import { BlueHero } from "@/components/home/BlueHero";
+import { BudgetPreview } from "@/components/home/BudgetPreview";
+import { GoalShelf, Greeting, NetWorthStory, RecentMoves } from "@/components/home/HomeStory";
+import { InsightStory } from "@/components/home/InsightStory";
+import { LastroOrbit } from "@/components/home/LastroOrbit";
+import { PulseCard } from "@/components/home/PulseCard";
+import { STAGGER, spring } from "@/lib/motion";
 
-/** Staggered entrance: the page "assembles" itself, once. */
-function Reveal({ children, i, className }: { children: React.ReactNode; i: number; className?: string }) {
+/** Entrance: greeting 0ms → hero 80 → state 160 → orbit 240 → pulse 320 → insight 400. */
+function Enter({ step, children, className }: { step: number; children: React.ReactNode; className?: string }) {
   const reduce = useReducedMotion();
   return (
-    <motion.div
-      className={className}
-      initial={reduce ? false : { opacity: 0, y: 14 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.45, delay: 0.04 * i, ease: [0.22, 1, 0.36, 1] }}
-    >
+    <motion.div className={className} initial={reduce ? false : { opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ ...spring.soft, delay: step * STAGGER }}>
       {children}
     </motion.div>
   );
 }
 
+/**
+ * Home is a vertical financial story, not a grid:
+ * state → today → foundation → what to know → what can I spend → goals → movement → growth.
+ * On desktop it becomes a composed canvas with controlled asymmetry.
+ */
 export function HomeScreen() {
   return (
-    <>
-      <HomeHeader />
-      {/* Mobile: one column in the order of the daily loop. Desktop: two columns with rhythm. */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12 lg:gap-6">
-        <div className="flex flex-col gap-6 lg:col-span-7">
-          <Reveal i={0}>
-            <FinancialHero />
-          </Reveal>
-          <Reveal i={1} className="lg:hidden">
-            <QuickActions />
-          </Reveal>
-          <Reveal i={2}>
-            <LastroScoreCard />
-          </Reveal>
-          <Reveal i={3} className="lg:hidden">
-            <DailyPulse />
-          </Reveal>
-          <Reveal i={4}>
-            <GoalsStrip />
-          </Reveal>
-          <Reveal i={5} className="hidden lg:block">
-            <NetWorthCard />
-          </Reveal>
-        </div>
+    <div className="flex flex-col gap-8 lg:gap-10">
+      <Enter step={0}>
+        <Greeting />
+      </Enter>
 
-        <div className="flex flex-col gap-6 lg:col-span-5">
-          <Reveal i={1} className="hidden lg:block">
-            <DailyPulse />
-          </Reveal>
-          <Reveal i={2} className="hidden lg:block">
-            <QuickActions />
-          </Reveal>
-          <Reveal i={5}>
-            <InsightCard />
-          </Reveal>
-          <Reveal i={6}>
-            <BudgetSnapshot />
-          </Reveal>
-          <Reveal i={7}>
-            <RecentTransactions />
-          </Reveal>
-        </div>
+      {/* Act 1 — the money, and today */}
+      <div className="grid gap-5 lg:grid-cols-12 lg:items-start lg:gap-8">
+        <Enter step={1} className="lg:col-span-8">
+          <BlueHero />
+        </Enter>
+        <Enter step={4} className="lg:col-span-4 lg:mt-24">
+          <PulseCard />
+        </Enter>
       </div>
-    </>
+
+      {/* Act 2 — the foundation, and one thing to know */}
+      <div className="grid gap-6 lg:grid-cols-12 lg:items-center lg:gap-8">
+        <Enter step={3} className="lg:col-span-6 lg:-ml-4">
+          <LastroOrbit />
+        </Enter>
+        <Enter step={5} className="lg:col-span-6 lg:col-start-7">
+          <InsightStory />
+        </Enter>
+      </div>
+
+      {/* Act 3 — what I can still spend */}
+      <div className="grid gap-6 lg:grid-cols-12 lg:gap-8">
+        <Enter step={6} className="lg:col-span-5 lg:col-start-2">
+          <BudgetPreview />
+        </Enter>
+        <Enter step={7} className="lg:col-span-5 lg:col-start-7 lg:mt-14">
+          <NetWorthStory />
+        </Enter>
+      </div>
+
+      {/* Act 4 — what I'm building */}
+      <Enter step={8}>
+        <GoalShelf />
+      </Enter>
+
+      {/* Act 5 — what happened */}
+      <Enter step={8} className="lg:mx-auto lg:w-full lg:max-w-[760px]">
+        <RecentMoves />
+      </Enter>
+    </div>
   );
 }

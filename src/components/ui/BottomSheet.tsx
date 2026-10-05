@@ -5,10 +5,11 @@ import { X } from "lucide-react";
 import { useEffect, useId, useRef } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/cn";
+import { spring, tween } from "@/lib/motion";
 
 /**
- * Bottom sheet on mobile (drag the handle down to dismiss), centered panel on desktop.
- * Locks page scroll, closes on Escape and returns focus to the trigger.
+ * <ExpandableSheet /> — a floating light sheet. On mobile it rises from the bottom (drag the
+ * handle to dismiss); on desktop it floats centered. Locks scroll, traps focus, Escape closes.
  */
 export function BottomSheet({
   open,
@@ -19,6 +20,7 @@ export function BottomSheet({
   className,
   hideTitle,
   size = "md",
+  tone = "light",
 }: {
   open: boolean;
   onClose: () => void;
@@ -28,6 +30,7 @@ export function BottomSheet({
   className?: string;
   hideTitle?: boolean;
   size?: "md" | "lg";
+  tone?: "light" | "ice";
 }) {
   const reduce = useReducedMotion();
   const drag = useDragControls();
@@ -43,10 +46,7 @@ export function BottomSheet({
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
       if (e.key === "Tab" && panel.current) {
-        // Minimal focus trap.
-        const f = panel.current.querySelectorAll<HTMLElement>(
-          'button:not([disabled]), [href], input:not([disabled]), select, textarea, [tabindex]:not([tabindex="-1"])',
-        );
+        const f = panel.current.querySelectorAll<HTMLElement>('button:not([disabled]), [href], input:not([disabled]), select, textarea, [tabindex]:not([tabindex="-1"])');
         if (!f.length) return;
         const first = f[0];
         const last = f[f.length - 1];
@@ -60,7 +60,6 @@ export function BottomSheet({
       }
     };
     window.addEventListener("keydown", onKey);
-    // Focus the panel unless a child grabs focus itself (autoFocus).
     const t = window.setTimeout(() => {
       if (panel.current && !panel.current.contains(document.activeElement)) panel.current.focus();
     }, 60);
@@ -83,11 +82,11 @@ export function BottomSheet({
       {open && (
         <div className="fixed inset-0 z-[60] flex items-end justify-center lg:items-center">
           <motion.div
-            className="absolute inset-0 bg-black/65 backdrop-blur-[2px]"
+            className="absolute inset-0 bg-[#0b2350]/30 backdrop-blur-md"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.25 }}
+            transition={tween("normal")}
             onClick={onClose}
             aria-hidden
           />
@@ -98,15 +97,15 @@ export function BottomSheet({
             aria-labelledby={`${id}-title`}
             tabIndex={-1}
             className={cn(
-              "relative flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-[28px] border border-white/[0.08] bg-[#0e1115] shadow-[0_-24px_80px_-20px_rgba(0,0,0,0.8)] outline-none",
-              "lg:rounded-[28px]",
-              size === "md" ? "lg:max-w-[460px]" : "lg:max-w-[560px]",
+              "relative m-2 flex max-h-[94dvh] w-[calc(100%-16px)] flex-col overflow-hidden rounded-[40px] text-ink-900 shadow-[0_-10px_80px_-20px_rgba(7,26,59,0.55)] outline-none lg:m-0",
+              tone === "light" ? "bg-gradient-to-b from-white to-[#EEF7FF]" : "bg-gradient-to-b from-[#EAF6FF] to-[#CDE9FF]",
+              size === "md" ? "lg:max-w-[480px]" : "lg:max-w-[580px]",
               className,
             )}
-            initial={reduce ? { opacity: 0 } : { y: "100%" }}
+            initial={reduce ? { opacity: 0 } : { y: "105%" }}
             animate={reduce ? { opacity: 1 } : { y: 0 }}
-            exit={reduce ? { opacity: 0 } : { y: "100%" }}
-            transition={{ type: "spring", stiffness: 380, damping: 38, mass: 0.9 }}
+            exit={reduce ? { opacity: 0 } : { y: "105%" }}
+            transition={spring.sheet}
             drag={reduce ? false : "y"}
             dragControls={drag}
             dragListener={false}
@@ -114,29 +113,21 @@ export function BottomSheet({
             dragElastic={{ top: 0, bottom: 0.6 }}
             onDragEnd={onDragEnd}
           >
-            <div
-              className="flex shrink-0 cursor-grab touch-none justify-center pt-2.5 pb-1 active:cursor-grabbing lg:hidden"
-              onPointerDown={(e) => drag.start(e)}
-              aria-hidden
-            >
-              <div className="h-1 w-10 rounded-full bg-white/20" />
+            <div className="flex shrink-0 cursor-grab touch-none justify-center pt-3 pb-1 active:cursor-grabbing lg:hidden" onPointerDown={(e) => drag.start(e)} aria-hidden>
+              <div className="h-1.5 w-11 rounded-full bg-ink-900/15" />
             </div>
-            <div className={cn("flex shrink-0 items-start justify-between gap-4 px-5 pt-2 lg:pt-5", hideTitle && "sr-only")}>
+            <div className={cn("flex shrink-0 items-start justify-between gap-4 px-6 pt-2 lg:pt-6", hideTitle && "sr-only")}>
               <div>
-                <h2 id={`${id}-title`} className="font-display text-[20px] font-semibold tracking-[-0.02em]">
+                <h2 id={`${id}-title`} className="font-display text-[26px] leading-tight font-semibold tracking-[-0.025em]">
                   {title}
                 </h2>
-                {description && <p className="mt-1 text-[14px] text-soft">{description}</p>}
+                {description && <p className="mt-1 text-[15px] text-ink-500">{description}</p>}
               </div>
-              <button
-                onClick={onClose}
-                className="pressable -mr-1 grid size-9 shrink-0 place-items-center rounded-full bg-white/[0.06] text-soft hover:bg-white/10"
-                aria-label="Fechar"
-              >
-                <X className="size-4" />
+              <button onClick={onClose} className="-mr-1 grid size-10 shrink-0 place-items-center rounded-full bg-ink-900/5 text-ink-700 transition-transform hover:bg-ink-900/10 active:scale-95" aria-label="Fechar">
+                <X className="size-[18px]" />
               </button>
             </div>
-            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pt-4 pb-[max(20px,var(--safe-bottom))]">{children}</div>
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 pt-5 pb-[max(24px,var(--safe-bottom))]">{children}</div>
           </motion.div>
         </div>
       )}

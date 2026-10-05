@@ -24,8 +24,8 @@ export function AuthScreen() {
   return (
     <div className="relative z-10 flex min-h-dvh">
       {/* Brand panel (desktop) */}
-      <aside className="relative hidden w-[46%] overflow-hidden lg:flex lg:flex-col lg:justify-between lg:p-12">
-        <div className="absolute inset-0 bg-[radial-gradient(120%_90%_at_0%_0%,#3a74ff_0%,#1d4fe0_26%,#0f2f97_52%,#0a1a55_78%,#050607_100%)]" aria-hidden />
+      <aside className="relative m-4 hidden w-[46%] overflow-hidden rounded-[44px] text-white shadow-[0_30px_70px_-28px_rgba(22,80,180,0.6)] lg:flex lg:flex-col lg:justify-between lg:p-12">
+        <div className="absolute inset-0 bg-[radial-gradient(120%_90%_at_0%_0%,#8ccbff_0%,#4f9ff8_30%,#3678f5_58%,#173d91_100%)]" aria-hidden />
         <div
           className="absolute inset-0 opacity-[0.14] mix-blend-overlay"
           style={{
@@ -36,18 +36,18 @@ export function AuthScreen() {
           aria-hidden
         />
         <div className="relative flex items-center gap-2.5">
-          <LastroMark size={32} />
+          <LastroMark size={32} tone="light" />
           <span className="font-display text-[23px] font-semibold tracking-[-0.03em]">lastro</span>
         </div>
         <div className="relative">
           <motion.div initial={reduce ? false : { opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}>
-            <LastroMark size={148} progress={0.84} />
+            <LastroMark size={148} progress={0.84} tone="light" />
           </motion.div>
           <h2 className="mt-10 max-w-md font-display text-[44px] leading-[1.05] font-semibold tracking-[-0.035em]">Sua vida financeira, visivelmente avançando.</h2>
           <ul className="mt-8 flex flex-col gap-3 text-[15px] text-white/80">
             {["Seu Lastro: a base que fica mais forte a cada passo", "Pulso: dez segundos para saber como está seu dia", "Metas com data de chegada, no seu ritmo"].map((t) => (
               <li key={t} className="flex items-center gap-3">
-                <span className="grid size-6 place-items-center rounded-full bg-white/15">
+                <span className="grid size-6 place-items-center rounded-full bg-white/20">
                   <Check className="size-3.5" strokeWidth={3} />
                 </span>
                 {t}
@@ -68,8 +68,8 @@ export function AuthScreen() {
 
           <AnimatePresence mode="wait" initial={false}>
             <motion.div key={mode} initial={reduce ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }}>
-              <h1 className="font-display text-[32px] leading-tight font-semibold tracking-[-0.03em]">{mode === "entrar" ? "Bom te ver de novo." : "Seu progresso começa aqui."}</h1>
-              <p className="mt-2 text-[15px] text-soft">{mode === "entrar" ? "Entre com seu e-mail ou telefone." : "Leva menos de um minuto. Só nome, contato e senha."}</p>
+              <h1 className="font-display text-[38px] leading-[1.05] font-semibold tracking-[-0.035em] text-ink-900">{mode === "entrar" ? "Bom te ver de novo." : "Seu progresso começa aqui."}</h1>
+              <p className="mt-2 text-[16px] text-ink-500">{mode === "entrar" ? "Entre com seu e-mail ou telefone." : "Leva menos de um minuto. Só nome, contato e senha."}</p>
             </motion.div>
           </AnimatePresence>
 
@@ -86,14 +86,14 @@ export function AuthScreen() {
 
           <AuthForm key={mode} mode={mode} onSwitch={setMode} />
 
-          <div className="my-7 flex items-center gap-3 text-[12px] text-muted" aria-hidden>
-            <span className="h-px flex-1 bg-white/[0.07]" />
+          <div className="my-7 flex items-center gap-3 text-[13px] text-ink-400" aria-hidden>
+            <span className="h-px flex-1 bg-ink-900/10" />
             ou
-            <span className="h-px flex-1 bg-white/[0.07]" />
+            <span className="h-px flex-1 bg-ink-900/10" />
           </div>
           <DemoButton />
 
-          <p className="mt-8 flex items-start gap-2 text-[12px] leading-relaxed text-muted">
+          <p className="mt-8 flex items-start gap-2 text-[13px] leading-relaxed text-ink-500">
             <Lock className="mt-0.5 size-3.5 shrink-0" />
             Nesta versão, sua conta e seus dados ficam salvos apenas neste aparelho. A senha é guardada de forma criptografada.
           </p>
@@ -108,9 +108,9 @@ function DemoButton() {
   return (
     <button
       onClick={enterDemo}
-      className="pressable flex h-12 w-full items-center justify-center gap-2 rounded-[16px] border border-white/[0.08] bg-white/[0.03] text-[15px] font-semibold text-off hover:bg-white/[0.06]"
+      className="flex h-14 w-full items-center justify-center gap-2 rounded-full bg-white/80 text-[15px] font-semibold text-ink-900 shadow-[inset_0_1px_0_#fff,0_10px_24px_-16px_rgba(22,80,180,0.5)] transition-transform active:scale-[0.98]"
     >
-      <Sparkles className="size-4 text-purple-light" />
+      <Sparkles className="size-4 text-violet" />
       Explorar com dados de demonstração
     </button>
   );
@@ -204,7 +204,7 @@ function AuthForm({ mode, onSwitch }: { mode: Mode; onSwitch: (m: Mode) => void 
           <button
             type="button"
             onClick={() => setShowPassword((s) => !s)}
-            className="grid size-9 place-items-center rounded-xl text-muted hover:text-off"
+            className="grid size-10 place-items-center rounded-full text-ink-500 hover:text-ink-900"
             aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
             aria-pressed={showPassword}
           >
@@ -215,8 +215,8 @@ function AuthForm({ mode, onSwitch }: { mode: Mode; onSwitch: (m: Mode) => void 
       {signup && (
         <ul className="-mt-1 flex flex-wrap gap-x-4 gap-y-1.5" aria-label="Requisitos da senha">
           {passwordChecks(password).map((c) => (
-            <li key={c.id} className={cn("flex items-center gap-1.5 text-[12px] transition-colors", c.ok ? "text-green" : submitted ? "text-coral-light" : "text-muted")}>
-              <span className={cn("grid size-4 place-items-center rounded-full", c.ok ? "bg-green/15" : "bg-white/[0.06]")}>{c.ok && <Check className="size-3" strokeWidth={3} />}</span>
+            <li key={c.id} className={cn("flex items-center gap-1.5 text-[12px] transition-colors", c.ok ? "text-mint-ink" : submitted ? "text-rose-ink" : "text-ink-500")}>
+              <span className={cn("grid size-4 place-items-center rounded-full", c.ok ? "bg-mint/20" : "bg-ink-900/[0.06]")}>{c.ok && <Check className="size-3" strokeWidth={3} />}</span>
               {c.label}
               <span className="sr-only">{c.ok ? "— atendido" : "— pendente"}</span>
             </li>
@@ -233,10 +233,10 @@ function AuthForm({ mode, onSwitch }: { mode: Mode; onSwitch: (m: Mode) => void 
             exit={{ opacity: 0, height: 0 }}
             className="overflow-hidden"
           >
-            <div className="rounded-[14px] bg-coral/10 px-4 py-3 text-[14px] text-coral-light">
+            <div className="rounded-[22px] bg-rose/10 px-4 py-3 text-[14px] text-rose-ink">
               {formError}
               {formError.includes("Que tal entrar") && (
-                <button type="button" onClick={() => onSwitch("entrar")} className="ml-1 font-semibold text-off underline underline-offset-2">
+                <button type="button" onClick={() => onSwitch("entrar")} className="ml-1 font-semibold text-ink-900 underline underline-offset-2">
                   Entrar
                 </button>
               )}
@@ -248,14 +248,14 @@ function AuthForm({ mode, onSwitch }: { mode: Mode; onSwitch: (m: Mode) => void 
       <button
         type="submit"
         disabled={busy}
-        className="pressable mt-2 flex h-14 items-center justify-center gap-2 rounded-[16px] bg-green text-[16px] font-semibold text-ink hover:bg-green-light disabled:opacity-70"
+        className="mt-2 flex h-15 items-center justify-center gap-2 rounded-full bg-midnight text-[17px] font-semibold text-white shadow-[0_14px_30px_-14px_rgba(7,26,59,0.8)] transition-transform active:scale-[0.97] disabled:opacity-70"
       >
         {busy ? <Loader2 className="size-5 animate-spin" aria-label="Aguarde" /> : <>{signup ? "Criar minha conta" : "Entrar"} <ArrowRight className="size-[18px]" /></>}
       </button>
 
-      <p className="text-center text-[14px] text-soft">
+      <p className="text-center text-[15px] text-ink-500">
         {signup ? "Já tem conta?" : "Ainda não tem conta?"}{" "}
-        <button type="button" onClick={() => onSwitch(signup ? "entrar" : "cadastro")} className="font-semibold text-off hover:text-green">
+        <button type="button" onClick={() => onSwitch(signup ? "entrar" : "cadastro")} className="font-semibold text-ink-900 underline-offset-2 hover:underline">
           {signup ? "Entrar" : "Criar agora"}
         </button>
       </p>
@@ -288,16 +288,16 @@ function TextField({
   const id = useId();
   return (
     <div>
-      <label htmlFor={id} className="mb-1.5 block text-[13px] font-medium text-soft">
+      <label htmlFor={id} className="mb-2 block pl-2 text-[14px] font-semibold text-ink-700">
         {label}
       </label>
       <div
         className={cn(
-          "flex h-[52px] items-center gap-2 rounded-[16px] border bg-white/[0.04] pr-1.5 pl-4 transition-colors focus-within:bg-white/[0.06]",
-          error ? "border-coral/60" : "border-white/[0.08] focus-within:border-green/60",
+          "flex h-14 items-center gap-2 rounded-full bg-white pr-2 pl-5 shadow-[0_8px_20px_-14px_rgba(22,80,180,0.5)] transition-shadow",
+          error ? "ring-2 ring-rose/60" : "focus-within:ring-2 focus-within:ring-electric",
         )}
       >
-        <span className="text-muted" aria-hidden>
+        <span className="text-ink-400" aria-hidden>
           {icon}
         </span>
         <input
@@ -308,13 +308,13 @@ function TextField({
           onBlur={onBlur}
           aria-invalid={!!error}
           aria-describedby={error || hint ? `${id}-msg` : undefined}
-          className="h-full min-w-0 flex-1 bg-transparent text-[16px] text-off outline-none placeholder:text-muted field-input"
+          className="h-full min-w-0 flex-1 bg-transparent text-[16px] text-ink-900 outline-none placeholder:text-ink-400 field-input"
           {...rest}
         />
         {trailing}
       </div>
       {(error || hint) && (
-        <p id={`${id}-msg`} className={cn("mt-1.5 text-[12px]", error ? "text-coral-light" : "text-muted")}>
+        <p id={`${id}-msg`} className={cn("mt-1.5 text-[12px]", error ? "text-rose-ink" : "text-ink-500")}>
           {error || hint}
         </p>
       )}

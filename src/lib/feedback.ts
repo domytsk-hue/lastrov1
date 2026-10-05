@@ -30,7 +30,7 @@ export function feedbackFor(tx: Pick<Transaction, "type" | "amount" | "categoryI
       };
     }
     return {
-      title: `${cat.name}: ${brl(b.remaining)} disponíveis`,
+      title: `${cat.name}: ${brl(b.remaining)} livres`,
       body: b.fixed ? `${formatNumber(b.pct * 100, 0)}% do orçamento usado.` : `Cerca de ${brl(b.dailyAllowance)}/dia até o fim do mês.`,
       tone: b.state === "healthy" ? "success" : "attention",
     };

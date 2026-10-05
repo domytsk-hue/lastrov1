@@ -59,18 +59,33 @@ src/
 - `dispatch` returns the next state synchronously. That lets the composer show the real consequence ("Alimentação: R$ 904 disponíveis · R$ 33/dia") the instant you save.
 - The natural-language parser returns a `ParsedEntry`, which an AI model could later fill instead without touching the UI.
 
-## Design tokens
+## Design language
 
-These are defined in `src/app/globals.css` (Tailwind v4 `@theme`):
+Lastro is designed as a personal financial *object*, not a dashboard. See [`docs/redesign-plan.md`](docs/redesign-plan.md) for the component-by-component mapping.
 
-- **Base colours:** ink `#050607`, surfaces `#0B0D10` / `#11151A`, graphite, muted, soft, off-white.
-- **Accent colours,** each with a light companion: green `#00D99B` (progress), purple `#6637F5` (intelligence), coral `#FF455D` (alerts, used sparingly), blue `#2563F5` (investments), yellow `#FFC234` (achievements).
-- **Fonts:** Telegraf for display and SF Pro Text for the UI, used when they are installed on the device. Otherwise Manrope and Inter, loaded through `next/font`, take their place.
-- **Radii and motion:** cards 24–28px, controls 14–16px, pills 999px. Motion uses 200–400ms with a `cubic-bezier(.22,1,.36,1)` ease, and respects `prefers-reduced-motion`.
+- **Environment:** an ice-blue background (`#D7EEFF`) lit by two soft lights that drift slowly. Depth comes from layered surfaces, light from the top-left, and shadow, never from borders.
+- **Surfaces** (`src/components/surfaces`):
+  - **BlueHero:** the blue gradient object at the top of Home.
+  - **Organic light card:** asymmetric radii.
+  - **Navy surface:** a dark section that gives the page rhythm.
+  - **TabbedSurface:** a pill tab joined to its body by a concave notch.
+  - **Capsules:** small pill elements on any surface.
+  - **Orbit:** a ring of variable-thickness segments with labels that run along it.
+  - **CurvedGauge, ProgressPath and ProtectionLayers:** custom progress shapes.
+- **Numbers:** `AnimatedMoney`, `AnimatedCounter` and `AnimatedPercentage` roll each digit independently and animate only transform.
+- **Motion:** tokens live in `src/lib/motion.ts` (fast 140ms · normal 280ms · slow 520ms; springs soft 260/26 and snappy 400/32).
+  - Page transitions use `app/template.tsx`.
+  - Home enters in 80ms steps.
+  - After a save, the amount flies from the composer to the balance through `FlowLayer`, and the balance digits then roll.
+  - Everything respects `prefers-reduced-motion`.
+- **Navigation:** a floating capsule at the top on desktop and at the bottom on mobile. The active item expands into a pill with its label, and the pill slides between items. On mobile, a separate mint orb holds the main action.
+- **Colours:** ice `#CDE9FF`, sky `#8CCBFF`, soft `#65B7F2`, electric `#3678F5`, deep `#173D91`, midnight `#071A3B`, navy `#061126`, snow `#F6FBFF`, ink `#081525`, and mint `#18E0AE`, used sparingly.
+- **Fonts:** Telegraf for display and SF Pro Text for the UI, when they are installed. Otherwise Manrope and Inter.
 
 ## Accessibility
 
 - Budget states always show an icon and a label, never colour alone.
+- Every swipe action (edit, duplicate, delete) is also available when you expand the row. The orbit segments are keyboard-focusable buttons.
 - Focus is visible everywhere, and bottom sheets trap focus and close on Escape.
 - On desktop, `N` opens the composer.
 - A privacy mode hides all values.

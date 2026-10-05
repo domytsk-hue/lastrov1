@@ -1,210 +1,287 @@
 "use client";
 
-import { motion, useReducedMotion } from "framer-motion";
-import { ArrowRight, BookOpen, Check, Lightbulb, Lock, TrendingUp, TriangleAlert } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
+import { ArrowRight, BookOpen, Check, ChevronDown, Lightbulb, Lock, TrendingUp, TriangleAlert } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { cn } from "@/lib/cn";
 import { balances, insights, netWorthChange, netWorthSeries, sum } from "@/lib/finance";
 import { addMonths, formatNumber } from "@/lib/format";
 import { weeklyMissions } from "@/lib/missions";
+import { spring } from "@/lib/motion";
 import type { InvestmentClass } from "@/lib/types";
 import { useFinance } from "@/store/finance-store";
 import { useUI } from "@/store/ui-store";
+import { NetWorthChart } from "@/components/charts/NetWorthChart";
 import { FinancialTimeline } from "@/components/grow/FinancialTimeline";
 import { LessonSheet } from "@/components/grow/LessonSheet";
-import { NetWorthCard } from "@/components/grow/NetWorthCard";
-import { Money, MoneyValue } from "@/components/ui/MoneyValue";
-import { ProgressBar } from "@/components/ui/Progress";
-import { Button, PageHeader, SectionHeader } from "@/components/ui/primitives";
+import { Orbit } from "@/components/orbit/Orbit";
+import { AnimatedMoney, Money } from "@/components/ui/AnimatedNumber";
+import { Button, PageHeader } from "@/components/ui/primitives";
+import { Capsule, FinancialSurface, StoryTitle, TabbedSurface } from "@/components/surfaces/Surface";
 
-const CLASS_META: Record<InvestmentClass, { label: string; color: string }> = {
-  "renda-fixa": { label: "Renda fixa", color: "#5B8CFF" },
-  acoes: { label: "Ações", color: "#8B6BFF" },
-  fiis: { label: "FIIs", color: "#4FE3C1" },
-  etfs: { label: "ETFs", color: "#00D99B" },
-  fundos: { label: "Fundos", color: "#C77DFF" },
-  internacional: { label: "Internacional", color: "#FFC234" },
-  cripto: { label: "Cripto", color: "#FF8A5B" },
-  outros: { label: "Outros", color: "#AEB4BD" },
+const CLASS_META: Record<InvestmentClass, { label: string; color: string; to: string }> = {
+  "renda-fixa": { label: "Renda fixa", color: "#173D91", to: "#3678F5" },
+  etfs: { label: "ETFs", color: "#2459D6", to: "#65B7F2" },
+  fiis: { label: "FIIs", color: "#0FB98F", to: "#18E0AE" },
+  internacional: { label: "Internacional", color: "#3678F5", to: "#8CCBFF" },
+  acoes: { label: "Ações", color: "#0B2560", to: "#2C63D8" },
+  fundos: { label: "Fundos", color: "#4F6A8E", to: "#9DB4D3" },
+  cripto: { label: "Cripto", color: "#E89A0C", to: "#FFC234" },
+  outros: { label: "Outros", color: "#7890AF", to: "#B8C8DD" },
 };
 
 export function GrowScreen() {
-  const { state, today } = useFinance();
+  const { state } = useFinance();
   const params = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
-  const lessonId = params.get("aula");
-  const lesson = state.lessons.find((l) => l.id === lessonId && l.available) ?? null;
-
-  const series = useMemo(() => netWorthSeries(state, today), [state, today]);
-  const change = useMemo(() => netWorthChange(state, today), [state, today]);
-  const b = useMemo(() => balances(state, today), [state, today]);
+  const lesson = state.lessons.find((l) => l.id === params.get("aula") && l.available) ?? null;
 
   return (
     <>
-      <PageHeader eyebrow="Crescer" title="Seu patrimônio" />
-
-      <div className="grid gap-6 lg:grid-cols-12">
-        <div className="lg:col-span-8">
-          <NetWorthCard height={220} link={false} />
-        </div>
-        <section className="card p-5 lg:col-span-4" aria-label="Ativos e passivos">
-          <p className="eyebrow">Como se forma</p>
-          <dl className="mt-4 flex flex-col gap-3 text-[14px]">
-            {[
-              ["Contas e carteira", b.available],
-              ["Reserva", b.reserve],
-              ["Metas guardadas", b.goals],
-              ["Investimentos", b.investments],
-              ...(b.otherAssets ? [["Outros bens", b.otherAssets] as const] : []),
-            ].map(([label, v]) => (
-              <div key={label} className="flex justify-between">
-                <dt className="text-soft">{label}</dt>
-                <dd className="font-medium tabular">
-                  <Money value={v as number} />
-                </dd>
-              </div>
-            ))}
-            <div className="flex justify-between border-t border-white/[0.06] pt-3">
-              <dt className="text-soft">Dívidas (cartão e outras)</dt>
-              <dd className="font-medium text-coral-light tabular">
-                −<Money value={b.liabilities} />
-              </dd>
-            </div>
-            <div className="flex items-baseline justify-between border-t border-white/[0.06] pt-3">
-              <dt className="font-semibold">Patrimônio</dt>
-              <dd>
-                <MoneyValue value={b.netWorth} size="md" cents={false} />
-              </dd>
-            </div>
-          </dl>
+      <PageHeader eyebrow="Longo prazo, sem pressa" title="Crescer" />
+      <div className="flex flex-col gap-14">
+        <NetWorth />
+        <section aria-labelledby="timeline-title">
+          <StoryTitle id="timeline-title" title="Sua história" kicker="Patrimônio mês a mês" />
+          <FinancialTimelineSection />
         </section>
+        <Investments />
+        <div className="grid gap-8 lg:grid-cols-12">
+          <div className="min-w-0 lg:col-span-7">
+            <Academy onOpen={(id) => router.replace(`${pathname}?aula=${id}`, { scroll: false })} />
+          </div>
+          <div className="min-w-0 lg:col-span-5">
+            <Missions />
+          </div>
+        </div>
+        <InsightsList />
       </div>
-
-      <section className="mt-8" aria-labelledby="timeline-title">
-        <SectionHeader title="Sua linha do tempo" />
-        <div className="card p-5 sm:p-6">
-          <FinancialTimeline series={series} milestones={state.milestones} record={change.record} />
-        </div>
-      </section>
-
-      <div className="mt-8 grid gap-6 lg:grid-cols-12">
-        <div className="lg:col-span-7">
-          <Investments />
-        </div>
-        <div className="lg:col-span-5">
-          <Missions />
-        </div>
-      </div>
-
-      <div className="mt-8 grid gap-6 lg:grid-cols-12">
-        <div className="lg:col-span-7">
-          <Academy onOpen={(id) => router.replace(`${pathname}?aula=${id}`, { scroll: false })} />
-        </div>
-        <div className="lg:col-span-5">
-          <InsightsList />
-        </div>
-      </div>
-
       <LessonSheet lesson={lesson} onClose={() => router.replace(pathname, { scroll: false })} />
     </>
   );
 }
 
+/* ---------------- Net worth ---------------- */
+
+function NetWorth() {
+  const { state, today } = useFinance();
+  const [open, setOpen] = useState(false);
+  const series = useMemo(() => netWorthSeries(state, today), [state, today]);
+  const ch = useMemo(() => netWorthChange(state, today), [state, today]);
+  const b = useMemo(() => balances(state, today), [state, today]);
+  const parts: [string, number][] = [
+    ["Contas e carteira", b.available],
+    ["Reserva", b.reserve],
+    ["Metas guardadas", b.goals],
+    ["Investimentos", b.investments],
+    ...(b.otherAssets ? ([["Outros bens", b.otherAssets]] as [string, number][]) : []),
+  ];
+
+  return (
+    <section aria-labelledby="nw-title">
+      <div className="grid items-end gap-6 lg:grid-cols-12">
+        <div className="px-1 lg:col-span-5">
+          <p id="nw-title" className="text-[16px] font-medium text-ink-500">
+            Patrimônio
+          </p>
+          <AnimatedMoney value={ch.now} size="display" cents={false} className="mt-1 text-ink-900" />
+          <p className="mt-3 font-display text-[22px] leading-snug font-semibold tracking-[-0.02em] text-ink-900">
+            {series.length < 2 ? (
+              "Hoje é o primeiro ponto da sua história."
+            ) : ch.yearDelta > 0 ? (
+              <>
+                Cresceu <span className="text-mint-ink"><Money value={ch.yearDelta} /></span> em {series.length - 1} meses.
+              </>
+            ) : (
+              "Estável nos últimos meses."
+            )}
+          </p>
+          {ch.record && (
+            <Capsule tone="mint" className="mt-3">
+              Maior valor que você já teve
+            </Capsule>
+          )}
+        </div>
+        <FinancialSurface tone="light" radius="xl" className="p-5 sm:p-7 lg:col-span-7">
+          <NetWorthChart series={series} milestones={state.milestones} height={220} />
+        </FinancialSurface>
+      </div>
+
+      <button onClick={() => setOpen((o) => !o)} aria-expanded={open} className="mt-5 inline-flex h-11 items-center gap-2 rounded-full bg-white/70 px-5 text-[15px] font-semibold text-ink-900 active:scale-[0.98]">
+        Como se forma
+        <ChevronDown className={cn("size-4 transition-transform", open && "rotate-180")} />
+      </button>
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} transition={spring.soft} className="overflow-hidden">
+            <div className="mt-4 flex flex-wrap gap-2">
+              {parts.map(([label, v]) => (
+                <Capsule key={label} tone="white" className="h-11 px-4 text-[15px]">
+                  {label} <span className="text-ink-500"><Money value={v} /></span>
+                </Capsule>
+              ))}
+              <Capsule tone="white" className="h-11 px-4 text-[15px]">
+                Dívidas <span className="text-rose-ink">−<Money value={b.liabilities} /></span>
+              </Capsule>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </section>
+  );
+}
+
+function FinancialTimelineSection() {
+  const { state, today } = useFinance();
+  const series = useMemo(() => netWorthSeries(state, today), [state, today]);
+  const ch = useMemo(() => netWorthChange(state, today), [state, today]);
+  return <FinancialTimeline series={series} milestones={state.milestones} record={ch.record} />;
+}
+
+/* ---------------- Investments: allocation orbit ---------------- */
+
 function Investments() {
   const { state, today } = useFinance();
   const { openComposer } = useUI();
-  const reduce = useReducedMotion();
+  const [selected, setSelected] = useState<string | null>(null);
   const invested = state.investments.reduce((s, i) => s + i.invested, 0);
   const current = state.investments.reduce((s, i) => s + i.currentValue, 0);
   const ret = current - invested;
   const byClass = new Map<InvestmentClass, number>();
   for (const i of state.investments) byClass.set(i.class, (byClass.get(i.class) ?? 0) + i.currentValue);
   const classes = [...byClass.entries()].sort((a, b) => b[1] - a[1]);
-  const contributions = state.transactions.filter((t) => t.type === "investment" && t.date <= today && t.date > addMonths(today, -6));
-  const avgMonthly = sum(contributions) / 6;
+  const max = classes[0]?.[1] ?? 1;
+  const avgMonthly = sum(state.transactions.filter((t) => t.type === "investment" && t.date <= today && t.date > addMonths(today, -6))) / 6;
+  const sel = selected ? classes.find(([c]) => c === selected) : undefined;
 
   return (
-    <section aria-labelledby="inv-title">
-      <SectionHeader title="Investimentos" action={<Button size="sm" variant="secondary" onClick={() => openComposer({ type: "investment" })}>Investir</Button>} />
-      <div className="card p-5 sm:p-6">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <p className="text-[13px] text-soft">Valor atual</p>
-            <MoneyValue value={current} size="xl" cents={false} className="mt-1" />
-          </div>
-          <div className="flex gap-6 text-right">
-            <div>
-              <p className="text-[12px] text-muted">Rendimento</p>
-              <p className={cn("text-[15px] font-semibold tabular", ret >= 0 ? "text-green" : "text-coral-light")}>
-                <Money value={ret} sign /> <span className="text-[12px] font-medium">({formatNumber((ret / Math.max(1, invested)) * 100, 1)}%)</span>
-              </p>
-            </div>
-            <div>
-              <p className="text-[12px] text-muted">Aporte médio</p>
-              <p className="text-[15px] font-semibold tabular">
-                <Money value={avgMonthly} />
-                /mês
-              </p>
-            </div>
-          </div>
+    <section aria-labelledby="inv-title" className="grid items-center gap-8 lg:grid-cols-12">
+      <div className="lg:col-span-6">
+        {classes.length === 0 ? (
+          <FinancialSurface tone="light" radius="xl" className="p-8 text-center">
+            <p className="font-display text-[24px] font-semibold">Seu primeiro aporte começa a órbita.</p>
+            <Button className="mt-5" onClick={() => openComposer({ type: "investment" })}>
+              Investir
+            </Button>
+          </FinancialSurface>
+        ) : (
+          <Orbit
+            mode="share"
+            ariaLabel={`Carteira de ${formatNumber(current, 0)} reais por classe`}
+            data={classes.map(([c, v]) => ({ id: c, label: CLASS_META[c].label, weight: v, value: 0.35 + 0.65 * (v / max), color: CLASS_META[c].color, colorTo: CLASS_META[c].to }))}
+            selected={selected}
+            onSelect={setSelected}
+            center={
+              <AnimatePresence mode="wait" initial={false}>
+                <motion.div key={selected ?? "all"} initial={{ opacity: 0, scale: 0.92 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.92 }} transition={spring.snappy} className="flex flex-col items-center">
+                  <span className="eyebrow text-[11px] text-ink-500">{sel ? CLASS_META[sel[0]].label : "Investido"}</span>
+                  <AnimatedMoney value={sel ? sel[1] : current} size="lg" cents={false} className="mt-1 text-ink-900" />
+                  <span className="mt-1 text-[13px] font-semibold text-ink-500">{sel ? `${formatNumber((sel[1] / current) * 100, 0)}% da carteira` : "toque numa classe"}</span>
+                </motion.div>
+              </AnimatePresence>
+            }
+          />
+        )}
+      </div>
+      <div className="px-1 lg:col-span-6">
+        <StoryTitle id="inv-title" title="Investimentos" kicker="Construção de patrimônio" className="px-0" />
+        <p className="font-display text-[30px] leading-[1.15] font-semibold tracking-[-0.025em] text-ink-900">
+          {ret >= 0 ? (
+            <>
+              Seu dinheiro já rendeu <span className="text-mint-ink"><Money value={ret} /></span>.
+            </>
+          ) : (
+            <>Oscilação de <Money value={ret} />. O longo prazo é o que conta.</>
+          )}
+        </p>
+        <div className="mt-5 flex flex-wrap gap-2">
+          <Capsule tone="white" className="h-10 px-4">
+            Aporte médio <Money value={avgMonthly} />/mês
+          </Capsule>
+          {invested > 0 && (
+            <Capsule tone="white" className="h-10 px-4">
+              {formatNumber((ret / invested) * 100, 1)}% desde o início
+            </Capsule>
+          )}
         </div>
-
-        <div className="mt-6 flex h-3 w-full gap-[3px] overflow-hidden rounded-full" role="img" aria-label="Alocação da carteira">
-          {classes.map(([c, v], i) => (
-            <motion.div
-              key={c}
-              style={{ background: CLASS_META[c].color }}
-              initial={reduce ? false : { width: 0 }}
-              whileInView={{ width: `${(v / current) * 100}%` }}
-              viewport={{ once: true }}
-              transition={{ duration: 0.8, delay: i * 0.06, ease: [0.22, 1, 0.36, 1] }}
-            />
-          ))}
-        </div>
-        <ul className="mt-5 grid grid-cols-2 gap-x-6 gap-y-3">
-          {classes.map(([c, v]) => (
-            <li key={c} className="flex items-center justify-between gap-2 text-[14px]">
-              <span className="flex items-center gap-2 text-soft">
-                <span className="size-2 rounded-full" style={{ background: CLASS_META[c].color }} />
-                {CLASS_META[c].label}
-              </span>
-              <span className="font-medium tabular">{formatNumber((v / current) * 100, 0)}%</span>
-            </li>
-          ))}
-        </ul>
-        <p className="mt-5 text-[13px] text-muted">Foco no longo prazo: o que importa é a constância dos aportes, não a oscilação do dia.</p>
+        <p className="mt-5 max-w-md text-[15px] text-ink-500">Constância importa mais que a oscilação do dia.</p>
+        <Button className="mt-6" onClick={() => openComposer({ type: "investment" })}>
+          <TrendingUp className="size-4" /> Investir
+        </Button>
       </div>
     </section>
   );
 }
+
+/* ---------------- Missions ---------------- */
 
 function Missions() {
   const { state, today } = useFinance();
   const missions = useMemo(() => weeklyMissions(state, today), [state, today]);
   const done = missions.filter((m) => m.done).length;
   return (
-    <section aria-labelledby="missions-title">
-      <SectionHeader title="Missões da semana" action={<span className="text-[13px] font-semibold text-yellow tabular">{done}/{missions.length}</span>} />
-      <ul className="card divide-y divide-white/[0.05] p-2">
+    <TabbedSurface color="navy" tab="Missões da semana" tabRight={<Capsule tone="tint">{done}/{missions.length}</Capsule>} aria-label="Missões da semana">
+      <ul className="flex flex-col gap-4">
         {missions.map((m) => (
-          <li key={m.id} className="flex items-start gap-3 p-3">
-            <span className={cn("mt-0.5 grid size-7 shrink-0 place-items-center rounded-full", m.done ? "bg-yellow text-ink" : "bg-white/[0.06] text-muted")}>
+          <li key={m.id} className="flex items-start gap-3">
+            <span className={cn("mt-0.5 grid size-8 shrink-0 place-items-center rounded-full", m.done ? "bg-mint text-midnight" : "bg-white/12 text-white/50")}>
               {m.done ? <Check className="size-4" strokeWidth={3} /> : <span className="size-1.5 rounded-full bg-current" />}
             </span>
             <div className="min-w-0 flex-1">
-              <p className={cn("text-[14px] font-medium", m.done && "text-soft line-through decoration-white/20")}>{m.title}</p>
-              {m.target > 1 && (
+              <p className={cn("text-[16px] font-semibold", m.done && "text-white/55 line-through decoration-white/25")}>{m.title}</p>
+              {m.target > 1 && !m.done && (
                 <div className="mt-2 flex items-center gap-2">
-                  <ProgressBar value={m.progress / m.target} color="var(--color-yellow)" height={4} />
-                  <span className="shrink-0 text-[12px] text-muted tabular">
+                  <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/12">
+                    <motion.div className="h-full origin-left rounded-full bg-mint" initial={{ scaleX: 0 }} animate={{ scaleX: m.progress / m.target }} transition={spring.soft} />
+                  </div>
+                  <span className="text-[13px] text-white/60 tabular">
                     {formatNumber(m.progress, 0)}/{m.target}
                   </span>
                 </div>
               )}
-              <p className="mt-1 text-[12px] text-muted">Desbloqueia: {m.reward}</p>
+              <p className="mt-1 text-[13px] text-white/50">Desbloqueia: {m.reward}</p>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </TabbedSurface>
+  );
+}
+
+/* ---------------- Academy ---------------- */
+
+function Academy({ onOpen }: { onOpen: (id: string) => void }) {
+  const { state } = useFinance();
+  const [first, ...rest] = state.lessons;
+  return (
+    <section aria-labelledby="academy-title">
+      <StoryTitle id="academy-title" title="Lastro Academy" kicker="Aulas curtas que terminam em ação" />
+      {first && (
+        <FinancialSurface tone="hero" radius="organic" interactive className="mb-4">
+          <button disabled={!first.available} onClick={() => onOpen(first.id)} className="flex w-full items-center gap-4 p-6 text-left">
+            <span className="grid size-14 shrink-0 place-items-center rounded-full bg-white/20">{first.completed ? <Check className="size-6" /> : <BookOpen className="size-6" />}</span>
+            <span className="flex-1">
+              <span className="block text-[13px] font-semibold tracking-[0.12em] text-white/75 uppercase">{first.category}</span>
+              <span className="mt-1 block font-display text-[24px] leading-tight font-semibold">{first.title}</span>
+              <span className="mt-1 block text-[14px] text-white/75">{first.minutes} min · calcula a sua no final</span>
+            </span>
+            <ArrowRight className="size-5" />
+          </button>
+        </FinancialSurface>
+      )}
+      <ul className="-mx-4 flex gap-3 overflow-x-auto px-4 pb-2 no-scrollbar sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0">
+        {rest.map((l) => (
+          <li key={l.id} className="w-[70%] shrink-0 sm:w-auto">
+            <div className="flex h-full flex-col rounded-[28px] bg-white/60 p-5">
+              <span className="flex items-center justify-between text-[12px] font-semibold tracking-[0.1em] text-ink-500 uppercase">
+                {l.category}
+                <Lock className="size-3.5" />
+              </span>
+              <span className="mt-2 font-display text-[18px] leading-snug font-semibold text-ink-700">{l.title}</span>
+              <span className="mt-auto pt-3 text-[13px] text-ink-400">Em breve</span>
             </div>
           </li>
         ))}
@@ -213,56 +290,29 @@ function Missions() {
   );
 }
 
-function Academy({ onOpen }: { onOpen: (id: string) => void }) {
-  const { state } = useFinance();
-  return (
-    <section aria-labelledby="academy-title">
-      <SectionHeader title="Lastro Academy" />
-      <ul className="grid gap-3 sm:grid-cols-2">
-        {state.lessons.map((l, i) => (
-          <li key={l.id}>
-            <button
-              disabled={!l.available}
-              onClick={() => onOpen(l.id)}
-              className={cn(
-                "card pressable flex h-full w-full flex-col items-start p-4 text-left disabled:cursor-not-allowed",
-                i === 0 ? "bg-gradient-to-br from-purple-deep to-surface-1 sm:col-span-2" : "",
-                l.available && "hover:border-white/10",
-              )}
-            >
-              <span className="flex w-full items-center justify-between">
-                <span className="text-[11px] font-semibold tracking-[0.1em] text-purple-light uppercase">{l.category}</span>
-                {l.completed ? <Check className="size-4 text-green" /> : !l.available ? <Lock className="size-3.5 text-muted" /> : <BookOpen className="size-4 text-purple-light" />}
-              </span>
-              <span className={cn("mt-2 font-display text-[17px] leading-snug font-semibold", !l.available && "text-soft")}>{l.title}</span>
-              <span className="mt-auto pt-3 text-[12px] text-muted">{l.available ? `${l.minutes} min · termina com uma ação real` : "Em breve"}</span>
-            </button>
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
-}
+/* ---------------- Insights ---------------- */
 
 function InsightsList() {
   const { state, today } = useFinance();
   const list = useMemo(() => insights(state, today), [state, today]);
   const icon = { positive: TrendingUp, neutral: Lightbulb, attention: TriangleAlert };
-  const color = { positive: "text-green", neutral: "text-purple-light", attention: "text-yellow" };
+  const color = { positive: "text-mint-ink bg-mint/15", neutral: "text-electric bg-electric/10", attention: "text-amber-ink bg-amber/15" };
   return (
     <section aria-labelledby="ins-title">
-      <SectionHeader title="Insights" />
-      <ul className="flex flex-col gap-2">
+      <StoryTitle id="ins-title" title="O que o Lastro percebeu" />
+      <ul className="grid gap-3 md:grid-cols-2">
         {list.map((i) => {
           const Icon = icon[i.tone];
           return (
-            <li key={i.id} className="card flex gap-3 p-4">
-              <Icon className={cn("mt-0.5 size-4 shrink-0", color[i.tone])} />
+            <li key={i.id} className="flex gap-4 rounded-[28px] bg-white/75 p-5">
+              <span className={cn("grid size-10 shrink-0 place-items-center rounded-full", color[i.tone])}>
+                <Icon className="size-[18px]" />
+              </span>
               <div>
-                <p className="text-[14px] leading-snug font-medium">{i.title}</p>
-                {i.body && <p className="mt-1 text-[13px] text-soft">{i.body}</p>}
+                <p className="text-[16px] leading-snug font-semibold text-ink-900">{i.title}</p>
+                {i.body && <p className="mt-1 text-[14px] text-ink-500">{i.body}</p>}
                 {i.action && (
-                  <Link href={i.action.href} className="mt-2 inline-flex items-center gap-1 text-[13px] font-semibold text-off hover:text-green">
+                  <Link href={i.action.href} className="mt-2 inline-flex items-center gap-1 text-[14px] font-semibold text-electric">
                     {i.action.label} <ArrowRight className="size-3.5" />
                   </Link>
                 )}

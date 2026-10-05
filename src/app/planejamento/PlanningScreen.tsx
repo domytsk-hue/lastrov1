@@ -4,16 +4,16 @@ import { motion, useReducedMotion } from "framer-motion";
 import { ArrowRight, Gauge, Pencil, ShieldCheck, Target } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import { getCategory } from "@/data/categories";
 import { evaluate } from "@/lib/calculator";
 import { allBudgets, goalStatus, monthSummary, projectMonth, reserveStatus } from "@/lib/finance";
 import { capitalize, formatMonthYear, formatNumber } from "@/lib/format";
+import { spring } from "@/lib/motion";
 import { useFinance } from "@/store/finance-store";
 import { BottomSheet } from "@/components/ui/BottomSheet";
-import { Money, MoneyValue } from "@/components/ui/MoneyValue";
-import { ProgressBar } from "@/components/ui/Progress";
+import { AnimatedMoney, Money } from "@/components/ui/AnimatedNumber";
 import { Button, Field, PageHeader, inputClass } from "@/components/ui/primitives";
 import { useToast } from "@/components/ui/Toast";
+import { FinancialSurface } from "@/components/surfaces/Surface";
 
 export function PlanningScreen() {
   const { state, today } = useFinance();
@@ -29,126 +29,108 @@ export function PlanningScreen() {
     const sumS = (xs: typeof budgets) => xs.reduce((s, b) => s + b.spent, 0);
     const income = state.user.monthlyIncome;
     const steps = [
-      { key: "ess", label: "Essenciais", hint: essentials.map((b) => getCategory(b.categoryId).name).join(", "), planned: sumL(essentials), actual: sumS(essentials), color: "#8B6BFF" },
-      { key: "life", label: "Estilo de vida", hint: lifestyle.map((b) => getCategory(b.categoryId).name).join(", "), planned: sumL(lifestyle), actual: sumS(lifestyle), color: "#FF8A5B" },
-      { key: "goals", label: "Metas e reserva", hint: "Japão, reserva e outras metas", planned: state.plan.goals, actual: ms.saved, color: "#FFC234" },
-      { key: "inv", label: "Investimentos", hint: "Aporte mensal", planned: state.plan.investments, actual: ms.invested, color: "#5B8CFF" },
+      { key: "ess", label: "Essenciais", hint: "Casa, mercado, transporte, saúde", planned: sumL(essentials), actual: sumS(essentials), color: "#173D91" },
+      { key: "life", label: "Estilo de vida", hint: "Lazer, compras e o resto", planned: sumL(lifestyle), actual: sumS(lifestyle), color: "#3678F5" },
+      { key: "goals", label: "Metas e reserva", hint: "O que você está construindo", planned: state.plan.goals, actual: ms.saved, color: "#65B7F2" },
+      { key: "inv", label: "Investimentos", hint: "Patrimônio de longo prazo", planned: state.plan.investments, actual: ms.invested, color: "#8CCBFF" },
     ];
     const allocated = steps.reduce((s, x) => s + x.planned, 0);
-    return { income, steps, free: income - allocated, receivedIncome: ms.income };
+    return { income, steps, free: income - allocated };
   }, [state, today]);
 
   const proj = useMemo(() => projectMonth(state, today), [state, today]);
   const r = reserveStatus(state, today);
-  const flowBase = Math.max(plan.income, plan.steps.reduce((s, x) => s + x.planned, 0));
+  const base = Math.max(plan.income, plan.steps.reduce((s, x) => s + x.planned, 0), 1);
+  const future = plan.steps[2].planned + plan.steps[3].planned;
 
   return (
     <>
-      <PageHeader eyebrow={capitalize(formatMonthYear(today))} title="Plano do mês" action={<Button size="sm" variant="secondary" onClick={() => setEditing(true)}><Pencil className="size-4" /> Ajustar</Button>} />
-
-      {plan.income <= 0 && (
-        <div className="card mb-6 flex flex-wrap items-center justify-between gap-4 p-5">
-          <div>
-            <p className="text-[15px] font-semibold">Comece pela sua renda mensal.</p>
-            <p className="text-[13px] text-soft">Com ela, o Lastro desenha para onde vai cada real do mês.</p>
-          </div>
-          <Button size="sm" onClick={() => setEditing(true)}>
-            Informar renda
+      <PageHeader
+        eyebrow={capitalize(formatMonthYear(today))}
+        title="Plano do mês"
+        action={
+          <Button size="sm" variant="secondary" onClick={() => setEditing(true)}>
+            <Pencil className="size-4" /> Ajustar
           </Button>
-        </div>
-      )}
-      <section className="card-raised mb-6 p-5 sm:p-7" aria-label="Para onde vai sua renda">
-        <div className="flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <p className="text-[13px] text-soft">Renda esperada</p>
-            <MoneyValue value={plan.income} size="xl" cents={false} className="mt-1" />
-          </div>
-          <div className="text-right">
-            <p className="text-[13px] text-soft">Dinheiro livre planejado</p>
-            <MoneyValue value={plan.free} size="lg" cents={false} className="mt-1" tone={plan.free >= 0 ? "positive" : "negative"} />
-          </div>
-        </div>
+        }
+      />
 
-        {/* The flow: income split into where it goes */}
-        <div className="mt-6 flex h-14 w-full gap-1 overflow-hidden rounded-[18px]" role="img" aria-label="Divisão da renda">
-          {[...plan.steps, { key: "free", label: "Livre", planned: Math.max(0, plan.free), color: "#00D99B" }].map((s, i) =>
-            s.planned > 0 ? (
-              <motion.div
-                key={s.key}
-                className="relative flex items-end overflow-hidden p-2"
-                style={{ background: `${s.color}${s.key === "free" ? "" : "cc"}` }}
-                initial={reduce ? false : { width: 0 }}
-                animate={{ width: `${(s.planned / flowBase) * 100}%` }}
-                transition={{ duration: 0.8, delay: i * 0.08, ease: [0.22, 1, 0.36, 1] }}
-              >
-                <span className="truncate text-[11px] font-semibold text-ink/80">{formatNumber((s.planned / plan.income) * 100, 0)}%</span>
-              </motion.div>
-            ) : null,
-          )}
-        </div>
-
-        <ol className="mt-6 flex flex-col">
-          <li className="flex items-center gap-3 pb-3">
-            <span className="size-2.5 rounded-full bg-off" />
-            <span className="flex-1 text-[15px] font-semibold">Renda</span>
-            <span className="text-[15px] font-semibold tabular">
-              <Money value={plan.income} />
-            </span>
-          </li>
-          {plan.steps.map((s) => (
-            <li key={s.key} className="relative border-l border-dashed border-white/10 py-3 pl-5 ml-[4.5px]">
-              <span className="absolute top-[18px] -left-[5px] size-2.5 rounded-full" style={{ background: s.color }} />
-              <div className="flex items-baseline gap-3">
-                <div className="min-w-0 flex-1">
-                  <p className="text-[15px] font-medium">{s.label}</p>
-                  <p className="truncate text-[12px] text-muted">{s.hint}</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-[15px] font-semibold tabular">
-                    <Money value={s.planned} />
-                  </p>
-                  <p className="text-[12px] text-muted tabular">
-                    <Money value={s.actual} /> até agora
-                  </p>
-                </div>
-              </div>
-              <ProgressBar value={s.planned ? s.actual / s.planned : 0} color={s.color} height={4} className="mt-2" />
-            </li>
-          ))}
-          <li className="relative ml-[4.5px] border-l border-dashed border-white/10 pt-3 pl-5">
-            <span className="absolute top-[18px] -left-[5px] size-2.5 rounded-full bg-green" />
-            <div className="flex items-baseline justify-between">
-              <p className="text-[15px] font-semibold text-green">Livre</p>
-              <p className="text-[15px] font-semibold text-green tabular">
-                <Money value={plan.free} />
-              </p>
+      <div className="grid gap-8 lg:grid-cols-12">
+        {/* The river: where each real of the month goes */}
+        <FinancialSurface tone="hero" radius="xl" className="p-6 sm:p-8 lg:col-span-7">
+          <p className="text-[16px] font-medium text-white/80">Entram por mês</p>
+          <AnimatedMoney value={plan.income} size="display" cents={false} className="mt-1 text-white" />
+          {plan.income <= 0 ? (
+            <div className="mt-6">
+              <p className="text-[17px] text-white/90">Comece pela sua renda. O Lastro desenha para onde vai cada real.</p>
+              <Button variant="mint" className="mt-4" onClick={() => setEditing(true)}>
+                Informar renda
+              </Button>
             </div>
-          </li>
-        </ol>
-
-        <p className="mt-6 rounded-[18px] bg-white/[0.04] p-4 text-[14px] leading-snug text-soft">
-          {proj.free >= 0 ? (
-            <>
-              Neste ritmo, você termina o mês com cerca de <span className="font-semibold text-off"><Money value={Math.round(proj.free / 10) * 10} /></span> livres, já com metas e aportes feitos.
-            </>
           ) : (
-            <>
-              Neste ritmo, o mês fecha <span className="font-semibold text-off"><Money value={-proj.free} /></span> acima do plano. As categorias de estilo de vida são as mais fáceis de ajustar.
-            </>
+            <ol className="relative mt-8 flex flex-col gap-3">
+              <span className="absolute top-2 bottom-2 left-[19px] w-[2px] rounded-full bg-white/25" aria-hidden />
+              {plan.steps.map((s, i) => (
+                <motion.li key={s.key} className="relative flex items-center gap-4" initial={reduce ? false : { opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} transition={{ ...spring.soft, delay: 0.1 + i * 0.08 }}>
+                  <span className="relative z-10 grid size-10 shrink-0 place-items-center rounded-full bg-white/90 text-[13px] font-bold text-midnight">{Math.round((s.planned / plan.income) * 100)}%</span>
+                  <div className="surface-glass min-w-0 flex-1 overflow-hidden rounded-[22px] px-4 py-3">
+                    <div className="flex items-baseline justify-between gap-3">
+                      <p className="truncate text-[16px] font-semibold">{s.label}</p>
+                      <p className="font-display text-[18px] font-semibold tabular">
+                        <Money value={s.planned} />
+                      </p>
+                    </div>
+                    <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/15">
+                      <motion.div className="h-full origin-left rounded-full bg-white" initial={reduce ? false : { scaleX: 0 }} animate={{ scaleX: s.planned ? Math.min(1, s.actual / s.planned) : 0 }} transition={{ ...spring.soft, delay: 0.3 + i * 0.08 }} />
+                    </div>
+                    <p className="mt-1.5 text-[13px] text-white/70">
+                      <Money value={s.actual} /> até agora
+                    </p>
+                  </div>
+                </motion.li>
+              ))}
+              <li className="relative flex items-center gap-4">
+                <span className="relative z-10 grid size-10 shrink-0 place-items-center rounded-full bg-mint text-[13px] font-bold text-midnight">{Math.round((Math.max(0, plan.free) / base) * 100)}%</span>
+                <div className="flex flex-1 items-baseline justify-between rounded-[22px] bg-mint/90 px-4 py-3 text-midnight">
+                  <p className="text-[16px] font-semibold">Livre</p>
+                  <p className="font-display text-[20px] font-semibold tabular">
+                    <Money value={plan.free} />
+                  </p>
+                </div>
+              </li>
+            </ol>
           )}
-        </p>
-      </section>
+        </FinancialSurface>
 
-      <div className="grid gap-4 sm:grid-cols-3">
-        <HubCard href="/orcamentos" icon={<Gauge className="size-5" />} color="#8B6BFF" title="Orçamentos" body={`${allBudgets(state, today).filter((b) => b.state === "healthy").length} de ${state.budgets.length} categorias saudáveis`} />
-        <HubCard
-          href="/metas"
-          icon={<Target className="size-5" />}
-          color="#FFC234"
-          title="Metas"
-          body={state.goals.length ? `${state.goals[0].name}: ${Math.round(goalStatus(state, state.goals[0], today).progress * 100)}%` : "Crie sua primeira meta"}
-        />
-        <HubCard href="/reserva" icon={<ShieldCheck className="size-5" />} color="#00D99B" title="Reserva" body={`${r.days} dias protegidos`} />
+        <div className="flex flex-col gap-6 lg:col-span-5 lg:pt-10">
+          <div className="px-1">
+            <p className="font-display text-[30px] leading-[1.15] font-semibold tracking-[-0.025em] text-ink-900">
+              {proj.free >= 0 ? (
+                <>
+                  Neste ritmo, sobram cerca de <span className="text-mint-ink"><Money value={Math.round(proj.free / 10) * 10} /></span>.
+                </>
+              ) : (
+                <>
+                  Neste ritmo, o mês fecha <Money value={-proj.free} /> acima do plano.
+                </>
+              )}
+            </p>
+            {plan.income > 0 && (
+              <p className="mt-3 text-[16px] text-ink-700">
+                Você direciona {Math.round((future / plan.income) * 100)}% da renda para o futuro.
+              </p>
+            )}
+          </div>
+          <HubCard href="/orcamentos" icon={<Gauge className="size-5" />} title="Orçamentos" body={`${allBudgets(state, today).filter((b) => b.state === "healthy").length} de ${state.budgets.length} no ritmo`} />
+          <HubCard
+            href="/metas"
+            icon={<Target className="size-5" />}
+            title="Metas"
+            body={state.goals.length ? `${state.goals[0].name}: ${Math.round(goalStatus(state, state.goals[0], today).progress * 100)}%` : "Crie sua primeira meta"}
+            right
+          />
+          <HubCard href="/reserva" icon={<ShieldCheck className="size-5" />} title="Reserva" body={`${r.days} dias protegidos`} />
+        </div>
       </div>
 
       <BottomSheet open={editing} onClose={() => setEditing(false)} title="Ajustar plano" description="Quanto entra e quanto vai para o futuro.">
@@ -158,18 +140,18 @@ export function PlanningScreen() {
   );
 }
 
-function HubCard({ href, icon, color, title, body }: { href: string; icon: React.ReactNode; color: string; title: string; body: string }) {
+function HubCard({ href, icon, title, body, right }: { href: string; icon: React.ReactNode; title: string; body: string; right?: boolean }) {
   return (
-    <Link href={href} className="card pressable group flex items-center gap-4 p-5 hover:bg-surface-2">
-      <span className="grid size-11 shrink-0 place-items-center rounded-[14px]" style={{ background: `${color}1f`, color }}>
-        {icon}
-      </span>
-      <div className="min-w-0 flex-1">
-        <p className="text-[16px] font-semibold">{title}</p>
-        <p className="truncate text-[13px] text-soft">{body}</p>
-      </div>
-      <ArrowRight className="size-4 text-muted transition-transform group-hover:translate-x-0.5 group-hover:text-off" />
-    </Link>
+    <FinancialSurface tone="light" radius={right ? "organicR" : "organic"} interactive>
+      <Link href={href} className="group flex items-center gap-4 p-5">
+        <span className="grid size-12 shrink-0 place-items-center rounded-full bg-midnight text-white">{icon}</span>
+        <div className="min-w-0 flex-1">
+          <p className="font-display text-[20px] font-semibold">{title}</p>
+          <p className="truncate text-[15px] text-ink-500">{body}</p>
+        </div>
+        <ArrowRight className="size-5 text-ink-400 transition-transform group-hover:translate-x-0.5" />
+      </Link>
+    </FinancialSurface>
   );
 }
 
@@ -194,8 +176,8 @@ function PlanForm({ onDone }: { onDone: () => void }) {
         </Field>
       </div>
       {v(income) > 0 && (
-        <p className="text-[14px] text-soft">
-          Você direciona <span className="font-semibold text-green">{formatNumber(((v(goals) + v(inv)) / v(income)) * 100, 0)}%</span> da renda para o futuro.
+        <p className="text-[15px] text-ink-500">
+          Você direciona <span className="font-semibold text-mint-ink">{formatNumber(((v(goals) + v(inv)) / v(income)) * 100, 0)}%</span> da renda para o futuro.
         </p>
       )}
       <Button

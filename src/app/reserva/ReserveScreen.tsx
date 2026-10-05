@@ -1,120 +1,120 @@
 "use client";
 
-import { BookOpen, Plus, Settings2, ShieldCheck } from "lucide-react";
+import { motion, useReducedMotion } from "framer-motion";
+import { BookOpen, Plus, Settings2 } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { evaluate } from "@/lib/calculator";
 import { categoryAverage, reserveStatus } from "@/lib/finance";
 import { formatMonthYear, formatNumber, formatRelativeDay } from "@/lib/format";
+import { spring } from "@/lib/motion";
 import { useFinance } from "@/store/finance-store";
 import { useUI } from "@/store/ui-store";
-import { ReserveDays } from "@/components/reserve/ReserveDays";
+import { ProtectionLayers } from "@/components/reserve/ProtectionLayers";
+import { Money } from "@/components/ui/AnimatedNumber";
 import { BottomSheet } from "@/components/ui/BottomSheet";
-import { Money, MoneyValue } from "@/components/ui/MoneyValue";
 import { Button, Field, PageHeader, Segmented, inputClass } from "@/components/ui/primitives";
 import { useToast } from "@/components/ui/Toast";
+import { Capsule, FinancialSurface, StoryTitle } from "@/components/surfaces/Surface";
 
 export function ReserveScreen() {
   const { state, today } = useFinance();
   const { openComposer } = useUI();
+  const reduce = useReducedMotion();
   const [settings, setSettings] = useState(false);
   const r = useMemo(() => reserveStatus(state, today), [state, today]);
   const lesson = state.lessons.find((l) => l.id === "reserva-ideal");
+  const configured = state.reserve.monthlyCost > 0;
 
   return (
     <>
       <PageHeader
-        eyebrow="Planejar"
-        title="Reserva de emergência"
+        eyebrow="Sua base de tranquilidade"
+        title="Reserva"
         action={
-          <button onClick={() => setSettings(true)} className="pressable grid size-10 place-items-center rounded-full bg-white/[0.06] text-soft hover:text-off" aria-label="Ajustar meta da reserva">
-            <Settings2 className="size-[18px]" />
+          <button onClick={() => setSettings(true)} className="grid size-12 place-items-center rounded-full bg-white/80 text-ink-700 shadow-[0_8px_20px_-12px_rgba(22,80,180,0.5)] active:scale-95" aria-label="Ajustar meta da reserva">
+            <Settings2 className="size-5" />
           </button>
         }
       />
 
-      <div className="grid gap-6 lg:grid-cols-12">
-        <section className="card-raised relative overflow-hidden p-5 sm:p-7 lg:col-span-7">
-          <div className="pointer-events-none absolute -top-32 -left-24 size-80 rounded-full bg-green/[0.08] blur-3xl" aria-hidden />
-          <div className="relative">
-            <div className="flex items-center gap-2 text-green">
-              <ShieldCheck className="size-5" />
-              <span className="text-[13px] font-semibold">{formatNumber(r.months, 1)} meses protegidos</span>
-            </div>
-            <MoneyValue value={r.balance} size="hero" cents={false} className="mt-3" />
-            {state.reserve.monthlyCost <= 0 && (
-              <div className="mt-5 rounded-[18px] bg-white/[0.05] p-4">
-                <p className="text-[15px] font-semibold">Quanto custa um mês essencial da sua vida?</p>
-                <p className="mt-1 text-[13px] text-soft">Com esse número, o Lastro mostra quantos dias sua reserva protege.</p>
-                <Button size="sm" className="mt-3" onClick={() => setSettings(true)}>
-                  Definir custo essencial
-                </Button>
+      {/* The emotional moment: months of protection as layers around a center */}
+      <section className="grid items-center gap-8 lg:grid-cols-2" aria-label="Proteção atual">
+        <div className="flex justify-center">
+          <ProtectionLayers months={r.months} target={state.reserve.targetMonths} size={320}>
+            <motion.div initial={reduce ? false : { opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ ...spring.soft, delay: 0.3 }}>
+              <p className="font-display text-[56px] leading-none font-semibold tracking-[-0.05em] text-ink-900">{formatNumber(r.months, 1)}</p>
+              <p className="mt-1 text-[13px] font-bold tracking-[0.18em] text-ink-500">MESES</p>
+            </motion.div>
+          </ProtectionLayers>
+        </div>
+        <div className="px-1">
+          {configured ? (
+            <>
+              <p className="font-display text-[34px] leading-[1.1] font-semibold tracking-[-0.03em] text-ink-900 sm:text-[42px]">
+                {r.days} dias de tranquilidade financeira.
+              </p>
+              <p className="mt-3 text-[17px] text-ink-700">
+                <Money value={r.balance} /> guardados · cada anel é um mês do seu custo essencial.
+              </p>
+              <div className="mt-6 flex flex-wrap gap-2">
+                <Capsule tone="white">
+                  Meta: {state.reserve.targetMonths} meses · <Money value={r.target} />
+                </Capsule>
+                {r.remaining > 0 && (
+                  <Capsule tone="white">
+                    Faltam <Money value={r.remaining} />
+                  </Capsule>
+                )}
+                {r.eta && r.remaining > 0 && <Capsule tone="mint">Completa em {formatMonthYear(r.eta)}</Capsule>}
               </div>
-            )}
-            {state.reserve.monthlyCost > 0 && <p className="mt-4 max-w-md font-display text-[20px] leading-snug font-medium tracking-[-0.015em] text-off">
-              Hoje, sua reserva cobriria cerca de <span className="text-green">{r.days} dias</span> do seu estilo de vida atual.
-            </p>}
-            <div className="mt-7">
-              <ReserveDays days={r.days} targetMonths={state.reserve.targetMonths} />
-            </div>
-            <p className="mt-4 text-[13px] text-muted">
-              Cada ponto é um dia de tranquilidade, com base no custo essencial de <Money value={state.reserve.monthlyCost} />/mês.
-            </p>
-          </div>
-        </section>
-
-        <div className="flex flex-col gap-4 lg:col-span-5">
-          <dl className="card grid grid-cols-2 gap-px overflow-hidden bg-white/[0.06] p-0">
-            {[
-              ["Meta", <Money key="t" value={r.target} />, `${state.reserve.targetMonths} meses`],
-              ["Faltam", <Money key="f" value={r.remaining} />, `${Math.max(0, r.targetDays - r.days)} dias`],
-              ["Ritmo atual", r.monthlyPace > 0 ? <><Money key="p" value={r.monthlyPace} />/mês</> : "—", "média de 3 meses"],
-              ["Chega lá em", r.remaining === 0 ? "Completa" : r.eta ? formatMonthYear(r.eta) : "—", r.eta ? "no seu ritmo" : "defina um ritmo"],
-            ].map(([label, value, hint]) => (
-              <div key={label as string} className="bg-surface-1 p-4">
-                <dt className="text-[12px] text-muted">{label}</dt>
-                <dd className="mt-1 text-[17px] font-semibold first-letter:uppercase">{value}</dd>
-                <dd className="text-[12px] text-muted">{hint}</dd>
-              </div>
-            ))}
-          </dl>
-
-          <Button size="lg" onClick={() => openComposer({ type: "transfer", toReserve: true })}>
+            </>
+          ) : (
+            <>
+              <p className="font-display text-[34px] leading-[1.1] font-semibold tracking-[-0.03em] text-ink-900">Quanto custa um mês essencial da sua vida?</p>
+              <p className="mt-3 text-[17px] text-ink-700">Com esse número, o Lastro mostra quantos dias sua reserva protege.</p>
+              <Button className="mt-6" onClick={() => setSettings(true)}>
+                Definir custo essencial
+              </Button>
+            </>
+          )}
+          <Button variant="mint" size="lg" className="mt-8 w-full sm:w-auto" onClick={() => openComposer({ type: "transfer", toReserve: true })}>
             <Plus className="size-5" /> Guardar na reserva
           </Button>
+        </div>
+      </section>
 
-          {lesson && (
-            <Link href="/crescer?aula=reserva-ideal" className="card group flex items-center gap-4 p-4 hover:bg-surface-2">
-              <span className="grid size-11 shrink-0 place-items-center rounded-[14px] bg-purple/20 text-purple-light">
+      <div className="mt-14 grid gap-8 lg:grid-cols-12">
+        <section className="lg:col-span-7" aria-labelledby="contrib-title">
+          <StoryTitle id="contrib-title" title="Últimos aportes" kicker={r.monthlyPace > 0 ? `Ritmo de ${formatNumber(r.monthlyPace, 0)} reais por mês` : undefined} />
+          <ul className="flex flex-col gap-2">
+            {r.contributions.slice(0, 6).map((t) => (
+              <li key={t.id} className="flex items-center justify-between rounded-[24px] bg-white/80 px-5 py-4">
+                <span className="text-[16px] font-medium text-ink-700 first-letter:uppercase">{formatRelativeDay(t.date, today)}</span>
+                <span className="font-display text-[18px] font-semibold text-mint-ink tabular">
+                  +<Money value={t.amount} cents />
+                </span>
+              </li>
+            ))}
+            {r.contributions.length === 0 && <li className="rounded-[24px] bg-white/60 px-5 py-6 text-[15px] text-ink-500">Seu primeiro aporte aparece aqui.</li>}
+          </ul>
+        </section>
+        {lesson && (
+          <FinancialSurface tone="navy" radius="organicR" interactive className="self-start lg:col-span-5 lg:mt-14">
+            <Link href="/crescer?aula=reserva-ideal" className="block p-6">
+              <span className="grid size-12 place-items-center rounded-full bg-white/12 text-mint">
                 <BookOpen className="size-5" />
               </span>
-              <div>
-                <p className="text-[15px] font-medium">{lesson.title}</p>
-                <p className="text-[13px] text-muted">
-                  Lastro Academy · {lesson.minutes} min{lesson.completed ? " · concluída" : ""}
-                </p>
-              </div>
+              <p className="mt-5 font-display text-[24px] leading-tight font-semibold">{lesson.title}</p>
+              <p className="mt-2 text-[15px] text-white/65">
+                Aula de {lesson.minutes} min{lesson.completed ? " · concluída" : " · termina com a sua conta"}
+              </p>
             </Link>
-          )}
-
-          <section className="card p-2">
-            <h2 className="eyebrow px-3 pt-3 pb-1">Últimos aportes</h2>
-            <ul>
-              {r.contributions.slice(0, 6).map((t) => (
-                <li key={t.id} className="flex items-center justify-between px-3 py-2.5">
-                  <span className="text-[14px] text-soft first-letter:uppercase">{formatRelativeDay(t.date, today)}</span>
-                  <span className="text-[14px] font-semibold text-green tabular">
-                    +<Money value={t.amount} cents />
-                  </span>
-                </li>
-              ))}
-              {r.contributions.length === 0 && <li className="px-3 py-4 text-[14px] text-soft">Seu primeiro aporte aparece aqui.</li>}
-            </ul>
-          </section>
-        </div>
+          </FinancialSurface>
+        )}
       </div>
 
-      <BottomSheet open={settings} onClose={() => setSettings(false)} title="Meta da reserva" description="Quanto custa um mês essencial da sua vida?">
+      <BottomSheet open={settings} onClose={() => setSettings(false)} title="Meta da reserva" description="Quanto custa um mês essencial?">
         {settings && <ReserveSettings onDone={() => setSettings(false)} />}
       </BottomSheet>
     </>
@@ -124,26 +124,25 @@ export function ReserveScreen() {
 function ReserveSettings({ onDone }: { onDone: () => void }) {
   const { state, today, dispatch } = useFinance();
   const toast = useToast();
-  const [cost, setCost] = useState(formatNumber(state.reserve.monthlyCost, 0));
+  const [cost, setCost] = useState(state.reserve.monthlyCost ? formatNumber(state.reserve.monthlyCost, 0) : "");
   const [months, setMonths] = useState(String(state.reserve.targetMonths));
-  const essential = useMemo(
-    () => (["moradia", "alimentacao", "transporte", "saude", "educacao"] as const).reduce((s, c) => s + categoryAverage(state, c, today), 0),
-    [state, today],
-  );
+  const essential = useMemo(() => (["moradia", "alimentacao", "transporte", "saude", "educacao"] as const).reduce((s, c) => s + categoryAverage(state, c, today), 0), [state, today]);
   const costValue = evaluate(cost)?.value ?? 0;
 
   return (
-    <div className="flex flex-col gap-5">
-      <Field label="Custo essencial por mês" hint={`Pela sua média de moradia, alimentação, transporte, saúde e educação: R$ ${formatNumber(essential, 0)}`}>
+    <div className="flex flex-col gap-6">
+      <Field label="Custo essencial por mês" hint={essential > 0 ? `Pela sua média de moradia, alimentação, transporte, saúde e educação: R$ ${formatNumber(essential, 0)}` : undefined}>
         <div className="flex gap-2">
-          <input className={inputClass} inputMode="decimal" value={cost} onChange={(e) => setCost(e.target.value)} />
-          <button onClick={() => setCost(formatNumber(Math.round(essential / 50) * 50, 0))} className="pressable h-12 shrink-0 rounded-[14px] bg-white/[0.06] px-3 text-[13px] font-semibold">
-            Usar média
-          </button>
+          <input className={inputClass} inputMode="decimal" value={cost} onChange={(e) => setCost(e.target.value)} placeholder="R$ 4.000" />
+          {essential > 0 && (
+            <button onClick={() => setCost(formatNumber(Math.round(essential / 50) * 50, 0))} className="h-13 shrink-0 rounded-full bg-midnight px-4 text-[14px] font-semibold text-white active:scale-95">
+              Usar média
+            </button>
+          )}
         </div>
       </Field>
       <div>
-        <p className="mb-1.5 text-[13px] font-medium text-soft">Meses de proteção</p>
+        <p className="mb-2 text-[14px] font-semibold text-ink-700">Meses de proteção</p>
         <Segmented
           label="Meses de proteção"
           value={months}
@@ -154,10 +153,10 @@ function ReserveSettings({ onDone }: { onDone: () => void }) {
             { value: "12", label: "12 meses" },
           ]}
         />
-        <p className="mt-2 text-[13px] text-muted">CLT costuma precisar de 6 meses. Autônomos, de 12.</p>
+        <p className="mt-2 text-[14px] text-ink-500">CLT costuma precisar de 6. Autônomos, de 12.</p>
       </div>
-      <p className="text-[14px] text-soft">
-        Nova meta: <span className="font-semibold text-off"><Money value={costValue * Number(months)} /></span>
+      <p className="text-[16px] text-ink-700">
+        Nova meta: <strong className="font-semibold text-ink-900"><Money value={costValue * Number(months)} /></strong>
       </p>
       <Button
         size="lg"

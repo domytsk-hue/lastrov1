@@ -1,30 +1,30 @@
 "use client";
 
-import { ArrowRight, Plus, ShieldCheck } from "lucide-react";
+import { ArrowRight, Plus } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 import { goalStatus, reserveStatus } from "@/lib/finance";
 import { formatNumber } from "@/lib/format";
 import type { Goal } from "@/lib/types";
 import { useFinance } from "@/store/finance-store";
-import { GoalCard } from "@/components/goals/GoalCard";
 import { GoalSheet } from "@/components/goals/GoalSheet";
-import { Money, MoneyValue } from "@/components/ui/MoneyValue";
-import { ProgressBar } from "@/components/ui/Progress";
+import { GoalSurface } from "@/components/goals/GoalSurface";
+import { ProtectionLayers } from "@/components/reserve/ProtectionLayers";
+import { AnimatedMoney, Money } from "@/components/ui/AnimatedNumber";
 import { Button, EmptyState, PageHeader } from "@/components/ui/primitives";
+import { Capsule, FinancialSurface } from "@/components/surfaces/Surface";
 
 export function GoalsScreen() {
   const { state, today } = useFinance();
   const [sheet, setSheet] = useState<{ goal?: Goal } | null>(null);
   const r = reserveStatus(state, today);
   const totalSaved = state.goals.reduce((s, g) => s + goalStatus(state, g, today).saved, 0);
-  const totalTarget = state.goals.reduce((s, g) => s + g.target, 0);
   const thisMonth = state.goals.reduce((s, g) => s + goalStatus(state, g, today).thisMonth, 0);
 
   return (
     <>
       <PageHeader
-        eyebrow="Planejar"
+        eyebrow="O que você está construindo"
         title="Metas"
         action={
           <Button size="sm" onClick={() => setSheet({})}>
@@ -33,40 +33,32 @@ export function GoalsScreen() {
         }
       />
 
-      <div className="mb-6 grid gap-4 lg:grid-cols-2">
-        <div className="card p-5">
-          <p className="text-[13px] text-soft">Guardado para suas metas</p>
-          <div className="mt-1 flex items-baseline gap-2">
-            <MoneyValue value={totalSaved} size="xl" cents={false} />
-            <span className="text-[14px] text-muted">
-              de <Money value={totalTarget} />
-            </span>
-          </div>
-          <p className="mt-2 text-[13px] text-soft">{thisMonth > 0 ? <>Este mês: <span className="font-semibold text-yellow">+<Money value={thisMonth} /></span></> : "Nenhum aporte este mês ainda."}</p>
+      <div className="mb-10 grid gap-6 lg:grid-cols-12 lg:items-center">
+        <div className="px-1 lg:col-span-7">
+          <AnimatedMoney value={totalSaved} size="display" cents={false} className="text-ink-900" />
+          <p className="mt-2 text-[18px] font-medium text-ink-700">guardados para o que importa.</p>
+          <div className="mt-4">{thisMonth > 0 ? <Capsule tone="mint">+<Money value={thisMonth} /> este mês</Capsule> : <Capsule tone="tint">Nenhum aporte este mês ainda</Capsule>}</div>
         </div>
-        <Link href="/reserva" className="card group flex items-center gap-4 p-5 hover:bg-surface-2">
-          <span className="grid size-12 shrink-0 place-items-center rounded-[16px] bg-green/12 text-green">
-            <ShieldCheck className="size-6" />
-          </span>
-          <div className="min-w-0 flex-1">
-            <p className="text-[13px] text-soft">Reserva de emergência</p>
-            <p className="font-display text-[20px] font-semibold">
-              {formatNumber(r.months, 1)} de {state.reserve.targetMonths} meses
-            </p>
-            <ProgressBar value={r.progress} height={5} className="mt-2" />
-          </div>
-          <ArrowRight className="size-4 text-muted group-hover:text-off" />
-        </Link>
+        <FinancialSurface tone="navy" radius="organicR" interactive className="lg:col-span-5">
+          <Link href="/reserva" className="flex items-center gap-5 p-5">
+            <ProtectionLayers months={r.months} target={state.reserve.targetMonths} size={96} compact />
+            <div className="flex-1">
+              <p className="font-display text-[34px] leading-none font-semibold">{formatNumber(r.months, 1)}</p>
+              <p className="mt-1 text-[15px] text-white/70">meses de reserva</p>
+            </div>
+            <ArrowRight className="size-5 text-white/60" />
+          </Link>
+        </FinancialSurface>
       </div>
 
       {state.goals.length === 0 ? (
-        <div className="card">
-          <EmptyState title="Toda conquista começa com um nome." body="Crie sua primeira meta e veja quando você chega lá, no seu ritmo." action={<Button onClick={() => setSheet({})}>Criar meta</Button>} />
-        </div>
+        <FinancialSurface tone="light" radius="xl">
+          <EmptyState title="Toda conquista começa com um nome." body="Crie sua primeira meta e veja quando você chega lá." action={<Button onClick={() => setSheet({})}>Criar meta</Button>} />
+        </FinancialSurface>
       ) : (
-        <div className="grid gap-4 lg:grid-cols-2">
-          {state.goals.map((g) => (
-            <GoalCard key={g.id} goal={g} onEdit={() => setSheet({ goal: g })} />
+        <div className="grid gap-6 md:grid-cols-2">
+          {state.goals.map((g, i) => (
+            <GoalSurface key={g.id} goal={g} index={i} size="lg" onEdit={() => setSheet({ goal: g })} className={i % 2 ? "md:mt-10" : ""} />
           ))}
         </div>
       )}

@@ -42,11 +42,11 @@ export function ProfileScreen() {
     <>
       <PageHeader eyebrow="Perfil" title={state.user.name} />
 
-      <section className="card-raised mb-6 flex items-center gap-5 p-5">
+      <section className="surface-light mb-8 flex items-center gap-5 rounded-[36px] p-6">
         <LastroMark size={64} progress={score / 100} />
         <div className="flex-1">
-          <p className="text-[13px] text-soft">Lastro {score} · Nível {lastroLevel(score).name}</p>
-          <p className="mt-1 text-[14px] text-muted">
+          <p className="text-[13px] text-ink-500">Lastro {score} · Nível {lastroLevel(score).name}</p>
+          <p className="mt-1 text-[14px] text-ink-400">
             No Lastro desde {formatMonthYear(state.user.memberSince)} · {s} {s === 1 ? "dia" : "dias"} seguidos
           </p>
         </div>
@@ -65,8 +65,8 @@ export function ProfileScreen() {
             <Row icon={<AtSign className="size-[18px]" />} label="Modo demonstração" value="Sem conta" disabled />
           )}
           <li>
-            <button onClick={signOut} className="flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors hover:bg-white/[0.02]">
-              <span className="grid size-9 place-items-center rounded-[12px] bg-coral/10 text-coral-light">
+            <button onClick={signOut} className="flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors hover:bg-ink-900/[0.03]">
+              <span className="grid size-9 place-items-center rounded-full bg-rose/10 text-rose-ink">
                 <LogOut className="size-[18px]" />
               </span>
               <span className="flex-1 text-[15px] font-medium">{isDemo ? "Sair da demonstração" : "Sair"}</span>
@@ -75,7 +75,7 @@ export function ProfileScreen() {
         </Group>
 
         <Group title="Você">
-          <Row icon={<Target className="size-[18px]" />} label="Objetivo e renda" value={OBJECTIVES.find((o) => o.value === state.user.objective)?.label} onClick={() => setSheet("profile")} />
+          <Row icon={<Target className="size-[18px]" />} label="Objetivo" value={OBJECTIVES.find((o) => o.value === state.user.objective)?.label} onClick={() => setSheet("profile")} />
           <Row icon={<Landmark className="size-[18px]" />} label="Contas" value={`${state.accounts.length} contas`} href="/movimentacoes?aba=contas" />
           <Row icon={<Shapes className="size-[18px]" />} label="Categorias" value={`${EXPENSE_CATEGORIES.length + INCOME_CATEGORIES.length}`} onClick={() => setSheet("categories")} />
         </Group>
@@ -83,14 +83,14 @@ export function ProfileScreen() {
         <Group title="Preferências">
           <li>
             <button onClick={togglePrivacy} role="switch" aria-checked={privacy} className="flex w-full items-center gap-3 px-4 py-3.5 text-left">
-              <span className="grid size-9 place-items-center rounded-[12px] bg-white/[0.05] text-soft">
+              <span className="grid size-9 place-items-center rounded-full bg-ink-900/5 text-ink-700">
                 <Eye className="size-[18px]" />
               </span>
               <span className="flex-1">
                 <span className="block text-[15px] font-medium">Ocultar valores</span>
-                <span className="text-[13px] text-muted">Para abrir o app em público</span>
+                <span className="text-[13px] text-ink-400">Para abrir o app em público</span>
               </span>
-              <span className={cn("relative h-7 w-12 rounded-full transition-colors", privacy ? "bg-green" : "bg-white/15")}>
+              <span className={cn("relative h-7 w-12 rounded-full transition-colors", privacy ? "bg-mint" : "bg-ink-900/15")}>
                 <span className={cn("absolute top-1 size-5 rounded-full bg-white transition-transform", privacy ? "translate-x-6" : "translate-x-1")} />
               </span>
             </button>
@@ -106,7 +106,7 @@ export function ProfileScreen() {
           <li className="px-4 py-3.5">
             {confirmReset ? (
               <div className="flex items-center justify-between gap-3">
-                <p className="text-[14px] text-soft">{isDemo ? "Apagar suas alterações e voltar aos dados do Lucas?" : "Apagar todas as movimentações, metas e orçamentos desta conta?"}</p>
+                <p className="text-[14px] text-ink-500">{isDemo ? "Apagar suas alterações e voltar aos dados do Lucas?" : "Apagar todas as movimentações, metas e orçamentos desta conta?"}</p>
                 <Button
                   size="sm"
                   variant="danger"
@@ -121,7 +121,7 @@ export function ProfileScreen() {
               </div>
             ) : (
               <button onClick={() => setConfirmReset(true)} className="flex w-full items-center gap-3 text-left">
-                <span className="grid size-9 place-items-center rounded-[12px] bg-white/[0.05] text-soft">
+                <span className="grid size-9 place-items-center rounded-full bg-ink-900/5 text-ink-700">
                   <RotateCcw className="size-[18px]" />
                 </span>
                 <span className="flex-1 text-[15px] font-medium">{isDemo ? "Restaurar dados de demonstração" : "Começar do zero"}</span>
@@ -135,19 +135,19 @@ export function ProfileScreen() {
         {sheet === "profile" && <ProfileForm onDone={() => setSheet(null)} />}
       </BottomSheet>
       <BottomSheet open={sheet === "categories"} onClose={() => setSheet(null)} title="Categorias">
-        <p className="eyebrow mb-2">Gastos</p>
+        <p className="eyebrow mb-2 text-ink-500">Gastos</p>
         <ul className="mb-5 grid grid-cols-2 gap-2">
           {EXPENSE_CATEGORIES.map((c) => (
-            <li key={c.id} className="flex items-center gap-2.5 rounded-[14px] bg-white/[0.03] p-2.5 text-[14px]">
+            <li key={c.id} className="flex items-center gap-2.5 rounded-[20px] bg-white p-2.5 text-[14px]">
               <CategoryIcon id={c.id} size={32} />
               {c.name}
             </li>
           ))}
         </ul>
-        <p className="eyebrow mb-2">Receitas</p>
+        <p className="eyebrow mb-2 text-ink-500">Receitas</p>
         <ul className="grid grid-cols-2 gap-2">
           {INCOME_CATEGORIES.map((c) => (
-            <li key={c.id} className="flex items-center gap-2.5 rounded-[14px] bg-white/[0.03] p-2.5 text-[14px]">
+            <li key={c.id} className="flex items-center gap-2.5 rounded-[20px] bg-white p-2.5 text-[14px]">
               <CategoryIcon id={c.id} size={32} />
               {c.name}
             </li>
@@ -160,9 +160,9 @@ export function ProfileScreen() {
 
 function Group({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section>
-      <h2 className="eyebrow mb-2 px-1">{title}</h2>
-      <ul className="card divide-y divide-white/[0.05] overflow-hidden">{children}</ul>
+    <section className="min-w-0">
+      <h2 className="eyebrow mb-3 px-2 text-ink-500">{title}</h2>
+      <ul className="surface-light divide-y divide-ink-900/5 overflow-hidden rounded-[32px]">{children}</ul>
     </section>
   );
 }
@@ -170,13 +170,13 @@ function Group({ title, children }: { title: string; children: React.ReactNode }
 function Row({ icon, label, value, onClick, href, disabled }: { icon: React.ReactNode; label: string; value?: string; onClick?: () => void; href?: string; disabled?: boolean }) {
   const inner = (
     <>
-      <span className="grid size-9 place-items-center rounded-[12px] bg-white/[0.05] text-soft">{icon}</span>
-      <span className="flex-1 text-[15px] font-medium">{label}</span>
-      {value && <span className="max-w-[45%] truncate text-[13px] text-muted">{value}</span>}
-      {!disabled && <ChevronRight className="size-4 text-muted" />}
+      <span className="grid size-9 place-items-center rounded-full bg-ink-900/5 text-ink-700">{icon}</span>
+      <span className="shrink-0 text-[15px] font-medium">{label}</span>
+      {value && <span className="min-w-0 flex-1 truncate text-right text-[14px] text-ink-400">{value}</span>}
+      {!disabled && <ChevronRight className="size-4 text-ink-400" />}
     </>
   );
-  const cls = "flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors hover:bg-white/[0.02]";
+  const cls = "flex w-full items-center gap-3 px-4 py-3.5 text-left transition-colors hover:bg-ink-900/[0.03]";
   return (
     <li>
       {href ? (
@@ -208,7 +208,7 @@ function ProfileForm({ onDone }: { onDone: () => void }) {
         <input className={inputClass} inputMode="decimal" value={income} onChange={(e) => setIncome(e.target.value)} />
       </Field>
       <div>
-        <p className="mb-1.5 text-[13px] font-medium text-soft">Objetivo principal</p>
+        <p className="mb-1.5 text-[14px] font-semibold text-ink-700">Objetivo principal</p>
         <div className="flex flex-col gap-1.5" role="radiogroup" aria-label="Objetivo principal">
           {OBJECTIVES.map((o) => (
             <button
@@ -216,7 +216,7 @@ function ProfileForm({ onDone }: { onDone: () => void }) {
               role="radio"
               aria-checked={objective === o.value}
               onClick={() => setObjective(o.value)}
-              className={cn("rounded-[14px] px-4 py-3 text-left text-[14px] font-medium", objective === o.value ? "bg-green/15 text-green ring-1 ring-green/40" : "bg-white/[0.04] text-soft")}
+              className={cn("rounded-full px-5 py-3.5 text-left text-[14px] font-medium", objective === o.value ? "bg-midnight text-white" : "bg-white text-ink-700")}
             >
               {o.label}
             </button>

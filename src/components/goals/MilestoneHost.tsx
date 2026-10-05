@@ -45,13 +45,13 @@ export function MilestoneHost() {
   return (
     <AnimatePresence>
       {goal && current && (
-        <motion.div className="fixed inset-0 z-[70] grid place-items-center bg-black/75 p-6 backdrop-blur-sm" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={close}>
+        <motion.div className="fixed inset-0 z-[70] grid place-items-center bg-[#0b2350]/40 p-6 backdrop-blur-md" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={close}>
           <motion.div
             role="dialog"
             aria-modal="true"
             aria-label={`${goal.name}: ${current.milestone}%`}
             onClick={(e) => e.stopPropagation()}
-            className="relative w-full max-w-sm overflow-hidden rounded-[32px] border border-white/10 bg-[#0e1115] p-7 text-center"
+            className="relative w-full max-w-sm overflow-hidden rounded-[44px] bg-gradient-to-b from-white to-[#EAF6FF] p-8 text-center text-ink-900 shadow-[0_40px_90px_-30px_rgba(7,26,59,0.6)]"
             initial={reduce ? { opacity: 0 } : { scale: 0.92, y: 20, opacity: 0 }}
             animate={{ scale: 1, y: 0, opacity: 1 }}
             exit={{ scale: 0.96, opacity: 0 }}
@@ -71,14 +71,14 @@ export function MilestoneHost() {
               ))}
             <div className="relative mx-auto w-fit">
               <ProgressRing value={current.milestone / 100} size={112} stroke={8} color={goal.color}>
-                <span className="font-display text-[30px] font-semibold tabular">{current.milestone}%</span>
+                <span className="font-display text-[32px] font-semibold text-ink-900 tabular">{current.milestone}%</span>
               </ProgressRing>
             </div>
             <p className="relative mt-6 text-[12px] font-semibold tracking-[0.14em] uppercase" style={{ color: goal.color }}>
               {goal.name}
             </p>
-            <p className="relative mt-2 font-display text-[24px] leading-tight font-semibold tracking-[-0.02em]">{COPY[current.milestone]}</p>
-            <p className="relative mt-2 text-[14px] text-soft">
+            <p className="relative mt-2 font-display text-[28px] leading-tight font-semibold tracking-[-0.02em]">{COPY[current.milestone]}</p>
+            <p className="relative mt-2 text-[15px] text-ink-500">
               {current.milestone === 100 ? `Você juntou ${formatBRL(goal.target, { cents: false })}. Isso é constância.` : `Faltam ${formatBRL(Math.max(0, goal.target - goalSaved(state, goal)), { cents: false })}. Bom ritmo.`}
             </p>
             <Button className="relative mt-6 w-full" onClick={close} autoFocus>

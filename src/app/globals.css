@@ -1,139 +1,177 @@
 @import "tailwindcss";
 
 /* ------------------------------------------------------------------
-   Lastro design tokens
-   Dark, graphite base with controlled colour accents.
+   Lastro design tokens — "financial object" language.
+   A soft ice-blue environment; depth from layered surfaces and light,
+   never from borders. Light comes from the top-left, everywhere.
    ------------------------------------------------------------------ */
 @theme {
-  /* Base */
-  --color-ink: #050607;
-  --color-surface-1: #0b0d10;
-  --color-surface-2: #11151a;
-  --color-surface-3: #171c22;
-  --color-graphite: #252a31;
-  --color-muted: #69717d;
-  --color-soft: #aeb4bd;
-  --color-off: #f4f6f8;
+  /* Atmosphere */
+  --color-ice: #cde9ff;
+  --color-sky: #8ccbff;
+  --color-blue-soft: #65b7f2;
+  --color-electric: #3678f5;
+  --color-deep: #173d91;
+  --color-midnight: #071a3b;
+  --color-navy: #061126;
+  --color-snow: #f6fbff;
+  --color-env: #d7eeff;
 
-  /* Accents + light companions */
-  --color-green: #00d99b;
-  --color-green-light: #6cf0c6;
-  --color-green-deep: #00473a;
-  --color-purple: #6637f5;
-  --color-purple-light: #8b6bff;
-  --color-purple-deep: #22145a;
-  --color-coral: #ff455d;
-  --color-coral-light: #ff8a9a;
-  --color-blue: #2563f5;
-  --color-blue-light: #5b8cff;
-  --color-blue-deep: #0b1d52;
-  --color-yellow: #ffc234;
-  --color-yellow-light: #ffd979;
-  --color-teal: #4fe3c1;
+  /* Text on light surfaces */
+  --color-ink-900: #081525;
+  --color-ink-700: #23395a;
+  --color-ink-500: #4f6a8e;
+  --color-ink-400: #7890af;
+
+  /* Accents (used sparingly) */
+  --color-mint: #18e0ae;
+  --color-mint-ink: #08876a; /* mint that passes contrast on light surfaces */
+  --color-amber: #f5a524;
+  --color-amber-ink: #a8620a;
+  --color-rose: #f0566b;
+  --color-rose-ink: #c22f45;
+  --color-violet: #6e56f8;
 
   /* Type */
   --font-display: "Telegraf", var(--font-manrope), "SF Pro Display", -apple-system, system-ui, sans-serif;
   --font-sans: "SF Pro Text", -apple-system, BlinkMacSystemFont, var(--font-inter), system-ui, sans-serif;
 
-  /* Radius */
-  --radius-card: 24px;
-  --radius-card-lg: 28px;
-  --radius-control: 16px;
-
-  /* Motion */
   --ease-lastro: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 :root {
-  color-scheme: dark;
-  --hairline: rgba(255, 255, 255, 0.06);
-  --hairline-strong: rgba(255, 255, 255, 0.1);
+  color-scheme: light;
   --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --shadow-soft: 0 18px 50px -22px rgba(22, 80, 180, 0.28);
+  --shadow-lift: 0 28px 70px -26px rgba(22, 80, 180, 0.42);
 }
 
 html {
-  background: var(--color-ink);
+  background: var(--color-env);
   -webkit-tap-highlight-color: transparent;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
 }
 
 body {
-  background: var(--color-ink);
-  color: var(--color-off);
+  background: var(--color-env);
+  color: var(--color-ink-900);
   font-family: var(--font-sans);
-  font-feature-settings: "tnum" 0;
   min-height: 100dvh;
   overscroll-behavior-y: none;
 }
 
-/* Atmosphere behind everything: two very soft light sources. */
-body::before {
+/* The environment: two soft lights that drift a few pixels over ~20s. */
+body::before,
+body::after {
   content: "";
   position: fixed;
-  inset: 0;
   pointer-events: none;
   z-index: 0;
-  background:
-    radial-gradient(60rem 40rem at 85% -10%, rgba(37, 99, 245, 0.13), transparent 60%),
-    radial-gradient(40rem 30rem at -10% 30%, rgba(102, 55, 245, 0.07), transparent 60%);
+  border-radius: 50%;
+}
+body::before {
+  width: 90vmax;
+  height: 90vmax;
+  top: -45vmax;
+  right: -30vmax;
+  background: radial-gradient(closest-side, rgba(101, 183, 242, 0.55), rgba(140, 203, 255, 0.18) 55%, transparent 75%);
+  animation: lastro-drift-a 22s ease-in-out infinite alternate;
+}
+body::after {
+  width: 80vmax;
+  height: 80vmax;
+  bottom: -40vmax;
+  left: -30vmax;
+  background: radial-gradient(closest-side, rgba(255, 255, 255, 0.85), rgba(246, 251, 255, 0.35) 55%, transparent 75%);
+  animation: lastro-drift-b 26s ease-in-out infinite alternate;
+}
+
+@keyframes lastro-drift-a {
+  to {
+    transform: translate3d(-24px, 18px, 0);
+  }
+}
+@keyframes lastro-drift-b {
+  to {
+    transform: translate3d(20px, -16px, 0);
+  }
 }
 
 ::selection {
-  background: rgba(0, 217, 155, 0.3);
+  background: rgba(54, 120, 245, 0.25);
 }
 
 :focus-visible {
-  outline: 2px solid var(--color-green);
-  outline-offset: 2px;
-  border-radius: 12px;
+  outline: 2.5px solid var(--color-electric);
+  outline-offset: 3px;
+  border-radius: 14px;
 }
 
-/* Inputs inside a field wrapper: the wrapper shows focus with its border. */
+/* Inputs inside a field wrapper: the wrapper shows focus. */
 .field-input:focus-visible {
   outline: none;
+}
+
+/* ---------------- Surfaces ---------------- */
+
+/* 1. Hero — the blue financial object. */
+@utility surface-hero {
+  background:
+    radial-gradient(120% 90% at 0% 0%, rgba(255, 255, 255, 0.28), transparent 55%),
+    linear-gradient(135deg, #7ccbff 0%, #4f9ff8 34%, #3678f5 62%, #2753cc 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.4),
+    inset 0 -1px 0 rgba(7, 26, 59, 0.15),
+    0 30px 70px -28px rgba(22, 80, 180, 0.55);
+  color: white;
+}
+
+/* 3. Organic light surface. */
+@utility surface-light {
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.95) 0%, rgba(240, 248, 255, 0.82) 100%);
+  box-shadow:
+    inset 0 1px 0 #fff,
+    var(--shadow-soft);
+}
+
+/* Dark navy rhythm surface. */
+@utility surface-navy {
+  background:
+    radial-gradient(110% 80% at 0% 0%, rgba(101, 183, 242, 0.22), transparent 55%),
+    linear-gradient(160deg, #173d91 0%, #0d2a68 45%, #071a3b 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.14),
+    0 30px 70px -30px rgba(7, 26, 59, 0.6);
+  color: white;
+}
+
+/* 2. Capsule on blue / navy surfaces. */
+@utility surface-glass {
+  background: rgba(255, 255, 255, 0.16);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28);
+}
+
+/* Capsule on light surfaces. */
+@utility surface-tint {
+  background: rgba(54, 120, 245, 0.08);
 }
 
 @utility tabular {
   font-variant-numeric: tabular-nums;
 }
 
-@utility hairline {
-  border: 1px solid var(--hairline);
-}
-
-@utility card {
-  background: var(--color-surface-1);
-  border: 1px solid var(--hairline);
-  border-radius: var(--radius-card);
-}
-
-@utility card-raised {
-  background: linear-gradient(180deg, #12161c 0%, #0d1014 100%);
-  border: 1px solid var(--hairline);
-  border-radius: var(--radius-card);
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset, 0 24px 48px -24px rgba(0, 0, 0, 0.6);
-}
-
 @utility eyebrow {
-  font-size: 11px;
-  letter-spacing: 0.12em;
+  font-size: 12px;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
   font-weight: 600;
-  color: var(--color-muted);
 }
 
 @utility no-scrollbar {
   scrollbar-width: none;
   &::-webkit-scrollbar {
     display: none;
-  }
-}
-
-@utility pressable {
-  transition: transform 160ms var(--ease-lastro), background-color 160ms, opacity 160ms;
-  &:active {
-    transform: scale(0.97);
   }
 }
 
@@ -145,7 +183,24 @@ body::before {
   }
   50% {
     opacity: 0.35;
-    transform: scale(0.75);
+    transform: scale(0.7);
+  }
+}
+
+@keyframes lastro-flow {
+  from {
+    transform: translateX(0);
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  to {
+    transform: translateX(var(--flow-distance, 100px));
+    opacity: 0;
   }
 }
 
@@ -163,7 +218,7 @@ body::before {
 }
 
 .skeleton {
-  background: linear-gradient(90deg, #11151a 25%, #1a1f26 50%, #11151a 75%);
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.5) 25%, rgba(255, 255, 255, 0.85) 50%, rgba(255, 255, 255, 0.5) 75%);
   background-size: 200% 100%;
   animation: lastro-shimmer 1.6s linear infinite;
 }

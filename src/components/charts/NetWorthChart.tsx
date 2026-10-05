@@ -65,8 +65,8 @@ export function NetWorthChart({
 
   if (!enough) {
     return (
-      <div className="grid place-items-center rounded-[18px] border border-dashed border-white/10 px-6 text-center" style={{ height }}>
-        <p className="max-w-xs text-[14px] text-soft">Seu gráfico de patrimônio começa a se desenhar a partir do segundo mês de uso.</p>
+      <div className="grid place-items-center rounded-[28px] bg-ink-900/[0.03] px-6 text-center" style={{ height }}>
+        <p className="max-w-xs text-[15px] text-ink-500">Seu gráfico de patrimônio começa a se desenhar a partir do segundo mês de uso.</p>
       </div>
     );
   }
@@ -92,17 +92,18 @@ export function NetWorthChart({
       >
         <defs>
           <linearGradient id="nw-area" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0%" stopColor="#00D99B" stopOpacity="0.28" />
-            <stop offset="100%" stopColor="#00D99B" stopOpacity="0" />
+            <stop offset="0%" stopColor="#3678F5" stopOpacity="0.22" />
+            <stop offset="100%" stopColor="#3678F5" stopOpacity="0" />
           </linearGradient>
           <linearGradient id="nw-line" x1="0" x2="1" y1="0" y2="0">
-            <stop offset="0%" stopColor="#5B8CFF" />
-            <stop offset="100%" stopColor="#00D99B" />
+            <stop offset="0%" stopColor="#8CCBFF" />
+            <stop offset="60%" stopColor="#3678F5" />
+            <stop offset="100%" stopColor="#18E0AE" />
           </linearGradient>
         </defs>
 
         {[0.33, 0.66].map((f) => (
-          <line key={f} x1="0" x2={W} y1={PAD_T + f * (H - PAD_T - PAD_B)} y2={PAD_T + f * (H - PAD_T - PAD_B)} stroke="rgba(255,255,255,0.04)" vectorEffect="non-scaling-stroke" />
+          <line key={f} x1="0" x2={W} y1={PAD_T + f * (H - PAD_T - PAD_B)} y2={PAD_T + f * (H - PAD_T - PAD_B)} stroke="transparent" vectorEffect="non-scaling-stroke" />
         ))}
 
         <motion.path d={geo.area} fill="url(#nw-area)" initial={reduce ? false : { opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.8, delay: 0.4 }} />
@@ -110,7 +111,7 @@ export function NetWorthChart({
           d={geo.line}
           fill="none"
           stroke="url(#nw-line)"
-          strokeWidth="3"
+          strokeWidth="3.5"
           strokeLinecap="round"
           vectorEffect="non-scaling-stroke"
           initial={reduce ? false : { pathLength: 0 }}
@@ -118,7 +119,7 @@ export function NetWorthChart({
           transition={{ duration: 1.2, ease: [0.22, 1, 0.36, 1] }}
         />
 
-        {active !== null && <line x1={p.x} x2={p.x} y1={PAD_T - 8} y2={H - PAD_B} stroke="rgba(255,255,255,0.18)" vectorEffect="non-scaling-stroke" />}
+        {active !== null && <line x1={p.x} x2={p.x} y1={PAD_T - 8} y2={H - PAD_B} stroke="rgba(23,61,145,0.18)" strokeDasharray="3 4" vectorEffect="non-scaling-stroke" />}
       </svg>
 
       {/* HTML overlays keep dots round and text crisp despite preserveAspectRatio="none". */}
@@ -126,27 +127,27 @@ export function NetWorthChart({
         {geo.ms.map((m) => (
           <span
             key={m.id}
-            className="absolute size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-ink bg-yellow"
+            className="absolute size-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-amber"
             style={{ left: `${(m.x / W) * 100}%`, top: m.y }}
             aria-hidden
           />
         ))}
         <span
-          className="absolute size-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-[3px] border-ink bg-green shadow-[0_0_0_6px_rgba(0,217,155,0.18)] transition-[left,top] duration-150"
+          className="absolute size-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-[3px] border-white bg-mint shadow-[0_0_0_6px_rgba(24,224,174,0.22)] transition-[left,top] duration-150"
           style={{ left: `${(p.x / W) * 100}%`, top: p.y }}
           aria-hidden
         />
         <div
-          className="absolute -translate-x-1/2 rounded-[10px] bg-[#1a1f26] px-2.5 py-1.5 text-center whitespace-nowrap shadow-xl ring-1 ring-white/10 transition-[left] duration-150"
+          className="absolute -translate-x-1/2 rounded-full bg-midnight px-3 py-1.5 text-center whitespace-nowrap shadow-[0_10px_24px_-10px_rgba(7,26,59,0.7)] transition-[left] duration-150"
           style={{ left: `clamp(48px, ${(p.x / W) * 100}%, calc(100% - 48px))`, top: Math.max(0, p.y - 56) }}
         >
-          <p className="text-[13px] font-semibold tabular text-off">{privacy ? "R$ ••••" : formatCompactBRL(series[shown].value)}</p>
-          <p className="text-[10px] font-medium text-muted uppercase">{shown === last ? "hoje" : `${monthName(series[shown].month, true)} ${series[shown].month.slice(2, 4)}`}</p>
+          <p className="text-[13px] font-semibold tabular text-white">{privacy ? "R$ ••••" : formatCompactBRL(series[shown].value)}</p>
+          <p className="text-[10px] font-medium text-white/60 uppercase">{shown === last ? "hoje" : `${monthName(series[shown].month, true)} ${series[shown].month.slice(2, 4)}`}</p>
         </div>
-        {ms && <p className="absolute right-0 bottom-0 left-0 text-center text-[12px] font-medium text-yellow">★ {ms.title}</p>}
+        {ms && <p className="absolute right-0 bottom-0 left-0 text-center text-[12px] font-semibold text-amber-ink">★ {ms.title}</p>}
       </div>
 
-      <div className="mt-1 flex justify-between text-[11px] font-medium text-muted uppercase" aria-hidden>
+      <div className="mt-2 flex justify-between text-[12px] font-semibold text-ink-400 uppercase" aria-hidden>
         <span>
           {monthName(series[0].month, true)} {series[0].month.slice(2, 4)}
         </span>

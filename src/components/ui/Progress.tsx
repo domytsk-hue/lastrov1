@@ -5,8 +5,8 @@ import { cn } from "@/lib/cn";
 
 export function ProgressBar({
   value,
-  color = "var(--color-green)",
-  track = "rgba(255,255,255,0.06)",
+  color = "var(--color-mint)",
+  track = "rgba(23,61,145,0.08)",
   height = 8,
   marker,
   className,
@@ -42,7 +42,7 @@ export function ProgressBar({
       />
       {marker !== undefined && (
         <div
-          className="absolute -top-1 -bottom-1 w-[2px] rounded-full bg-off/70"
+          className="absolute -top-1 -bottom-1 w-[2px] rounded-full bg-ink-900/60"
           style={{ left: `calc(${Math.max(0, Math.min(1, marker)) * 100}% - 1px)` }}
           aria-hidden
         />
@@ -55,8 +55,8 @@ export function ProgressRing({
   value,
   size = 56,
   stroke = 6,
-  color = "var(--color-green)",
-  track = "rgba(255,255,255,0.07)",
+  color = "var(--color-mint)",
+  track = "rgba(23,61,145,0.08)",
   children,
   className,
 }: {

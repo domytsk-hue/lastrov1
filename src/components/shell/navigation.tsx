@@ -5,9 +5,10 @@ import { ArrowLeftRight, Compass, House, Plus, Sprout, UserRound, type LucideIco
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/cn";
-import { lastroScore } from "@/lib/finance";
+import { spring } from "@/lib/motion";
 import { useFinance } from "@/store/finance-store";
 import { useUI } from "@/store/ui-store";
+import { TactileButton } from "@/components/surfaces/Surface";
 import { LastroMark } from "./LastroMark";
 
 interface NavItem {
@@ -22,142 +23,106 @@ export const NAV: NavItem[] = [
   { href: "/movimentacoes", label: "Movimentos", icon: ArrowLeftRight, match: ["/movimentacoes"] },
   { href: "/planejamento", label: "Planejar", icon: Compass, match: ["/planejamento", "/orcamentos", "/metas", "/reserva"] },
   { href: "/crescer", label: "Crescer", icon: Sprout, match: ["/crescer"] },
-  { href: "/perfil", label: "Perfil", icon: UserRound, match: ["/perfil"] },
 ];
+const PROFILE: NavItem = { href: "/perfil", label: "Perfil", icon: UserRound, match: ["/perfil"] };
 
 const isActive = (item: NavItem, path: string) => item.match.some((m) => path === m || path.startsWith(`${m}/`));
 
-/* ---------------- Mobile ---------------- */
-
-export function BottomNavigation() {
-  const path = usePathname();
-  const { openComposer } = useUI();
+/** Icon when idle; expands into a pill with its label when selected. The pill slides between items. */
+function NavPill({ item, active, layoutId, dark }: { item: NavItem; active: boolean; layoutId: string; dark?: boolean }) {
+  const Icon = item.icon;
   return (
-    <>
-      <button
-        onClick={() => openComposer({ type: "expense" })}
-        className="pressable fixed right-4 z-40 grid size-[60px] place-items-center rounded-full bg-green text-ink shadow-[0_12px_32px_-8px_rgba(0,217,155,0.55)] lg:hidden"
-        style={{ bottom: "calc(max(12px, var(--safe-bottom)) + 76px)" }}
-        aria-label="Registrar gasto"
-      >
-        <Plus className="size-7" strokeWidth={2.4} />
-      </button>
-      <nav
-        aria-label="Navegação principal"
-        className="fixed inset-x-0 bottom-0 z-40 px-3 pb-[max(10px,var(--safe-bottom))] lg:hidden"
-      >
-        <div className="mx-auto flex max-w-md items-stretch justify-between rounded-[26px] border border-white/[0.07] bg-[#0d1014]/85 p-1.5 shadow-[0_-8px_40px_-12px_rgba(0,0,0,0.8)] backdrop-blur-2xl">
-          {NAV.map((item) => {
-            const active = isActive(item, path);
-            const Icon = item.icon;
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                aria-current={active ? "page" : undefined}
-                className={cn(
-                  "relative flex min-h-[54px] flex-1 flex-col items-center justify-center gap-1 rounded-[20px] text-[11px] font-medium transition-colors",
-                  active ? "text-off" : "text-muted hover:text-soft",
-                )}
-              >
-                {active && (
-                  <motion.span
-                    layoutId="bottom-nav-active"
-                    className="absolute inset-0 rounded-[20px] bg-white/[0.07]"
-                    transition={{ type: "spring", stiffness: 500, damping: 40 }}
-                  />
-                )}
-                <Icon className="relative size-[21px]" strokeWidth={active ? 2.3 : 1.9} />
-                <span className="relative">{item.label}</span>
-              </Link>
-            );
-          })}
-        </div>
-      </nav>
-    </>
+    <Link
+      href={item.href}
+      aria-current={active ? "page" : undefined}
+      aria-label={item.label}
+      className={cn(
+        "relative flex h-12 min-w-12 items-center justify-center gap-2 rounded-full px-3 text-[14px] font-semibold transition-colors",
+        active ? (dark ? "text-midnight" : "text-white") : dark ? "text-white/65 hover:text-white" : "text-ink-500 hover:text-ink-900",
+      )}
+    >
+      {active && <motion.span layoutId={layoutId} className={cn("absolute inset-0 rounded-full", dark ? "bg-white" : "bg-midnight")} transition={spring.snappy} />}
+      <motion.span className="relative" animate={{ scale: active ? 1 : 0.94 }} transition={spring.snappy}>
+        <Icon className="size-[21px]" strokeWidth={active ? 2.3 : 1.9} />
+      </motion.span>
+      {active && (
+        <motion.span className="relative whitespace-nowrap" initial={{ opacity: 0, x: -4 }} animate={{ opacity: 1, x: 0 }} transition={{ ...spring.snappy, delay: 0.05 }}>
+          {item.label}
+        </motion.span>
+      )}
+    </Link>
   );
 }
 
-/* ---------------- Desktop ---------------- */
-
-export function SideNavigation() {
+/** Desktop: a thin floating capsule at the top. No sidebar. */
+export function FloatingNavDesktop() {
   const path = usePathname();
   const { openComposer } = useUI();
-  const { state, today } = useFinance();
-  const { score } = lastroScore(state, today);
+  const { state } = useFinance();
+  const profileActive = isActive(PROFILE, path);
 
   return (
-    <aside className="fixed inset-y-0 left-0 z-30 hidden w-[248px] flex-col border-r border-white/[0.05] bg-ink/60 px-4 py-6 backdrop-blur-xl lg:flex">
-      <Link href="/home" className="mb-8 flex items-center gap-2.5 px-3" aria-label="Lastro — início">
-        <LastroMark size={28} />
-        <span className="font-display text-[21px] font-semibold tracking-[-0.03em]">lastro</span>
-      </Link>
-
-      <button
-        onClick={() => openComposer({ type: "expense" })}
-        className="pressable mb-6 flex h-12 items-center justify-between rounded-[16px] bg-green px-4 text-[15px] font-semibold text-ink hover:bg-green-light"
+    <header className="pointer-events-none fixed inset-x-0 top-5 z-40 hidden justify-center lg:flex">
+      <nav
+        aria-label="Navegação principal"
+        className="pointer-events-auto flex items-center gap-1 rounded-full bg-white/70 p-1.5 shadow-[0_18px_50px_-20px_rgba(22,80,180,0.45),inset_0_1px_0_#fff] backdrop-blur-xl"
       >
-        <span className="flex items-center gap-2">
-          <Plus className="size-5" strokeWidth={2.4} />
-          Registrar gasto
-        </span>
-        <kbd className="rounded-md bg-black/15 px-1.5 py-0.5 font-sans text-[11px] font-semibold">N</kbd>
-      </button>
-
-      <nav aria-label="Navegação principal" className="flex flex-col gap-1">
-        {NAV.map((item) => {
-          const active = isActive(item, path);
-          const Icon = item.icon;
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              aria-current={active ? "page" : undefined}
-              className={cn(
-                "relative flex h-11 items-center gap-3 rounded-[14px] px-3 text-[15px] font-medium transition-colors",
-                active ? "text-off" : "text-muted hover:bg-white/[0.03] hover:text-soft",
-              )}
-            >
-              {active && (
-                <motion.span
-                  layoutId="side-nav-active"
-                  className="absolute inset-0 rounded-[14px] bg-white/[0.06]"
-                  transition={{ type: "spring", stiffness: 500, damping: 40 }}
-                />
-              )}
-              <Icon className="relative size-5" strokeWidth={active ? 2.2 : 1.9} />
-              <span className="relative">{item.label}</span>
-            </Link>
-          );
-        })}
+        <Link href="/home" className="grid size-12 place-items-center rounded-full" aria-label="Lastro — início">
+          <LastroMark size={26} tone="dark" />
+        </Link>
+        <span className="mx-1 h-6 w-px bg-ink-900/10" aria-hidden />
+        {NAV.map((item) => (
+          <NavPill key={item.href} item={item} active={isActive(item, path)} layoutId="nav-desktop" />
+        ))}
+        <span className="mx-1 h-6 w-px bg-ink-900/10" aria-hidden />
+        <Link
+          href="/perfil"
+          aria-current={profileActive ? "page" : undefined}
+          aria-label="Perfil"
+          className={cn(
+            "grid size-12 place-items-center rounded-full font-display text-[16px] font-semibold transition-shadow",
+            profileActive ? "bg-midnight text-white" : "bg-gradient-to-br from-sky to-electric text-white",
+          )}
+        >
+          {state.user.name.charAt(0)}
+        </Link>
+        <TactileButton
+          magnetic
+          onClick={() => openComposer({ type: "expense" })}
+          className="ml-1 flex h-12 items-center gap-2 rounded-full bg-mint pr-5 pl-4 text-[15px] font-semibold text-midnight shadow-[0_10px_24px_-10px_rgba(24,224,174,0.9)]"
+        >
+          <Plus className="size-5" strokeWidth={2.5} />
+          Gasto
+          <kbd className="ml-1 rounded-md bg-midnight/10 px-1.5 font-sans text-[11px]">N</kbd>
+        </TactileButton>
       </nav>
+    </header>
+  );
+}
 
-      {isActive(NAV[2], path) && (
-        <div className="mt-2 ml-6 flex flex-col gap-0.5 border-l border-white/[0.06] pl-3">
-          {[
-            ["/orcamentos", "Orçamentos"],
-            ["/metas", "Metas"],
-            ["/reserva", "Reserva"],
-          ].map(([href, label]) => (
-            <Link
-              key={href}
-              href={href}
-              aria-current={path === href ? "page" : undefined}
-              className={cn("rounded-lg px-2 py-1.5 text-[14px]", path === href ? "text-off" : "text-muted hover:text-soft")}
-            >
-              {label}
-            </Link>
-          ))}
-        </div>
-      )}
-
-      <Link href="/home#lastro" className="card mt-auto flex items-center gap-3 p-3.5 hover:bg-surface-2">
-        <LastroMark size={34} progress={score / 100} />
-        <div>
-          <p className="eyebrow !text-[10px]">Seu Lastro</p>
-          <p className="font-display text-[20px] font-semibold leading-tight tabular">{score}</p>
-        </div>
-      </Link>
-    </aside>
+/** Mobile: a native-feeling floating capsule + a separate green orb for the main action. */
+export function FloatingNavMobile() {
+  const path = usePathname();
+  const { openComposer } = useUI();
+  // Perfil lives behind the avatar on mobile, so the capsule stays thumb-sized.
+  const items = NAV;
+  return (
+    <div className="pointer-events-none fixed inset-x-0 bottom-0 z-40 flex items-end justify-center gap-2.5 px-3 pb-[max(12px,var(--safe-bottom))] lg:hidden">
+      <nav
+        aria-label="Navegação principal"
+        className="pointer-events-auto flex items-center gap-0.5 rounded-full bg-midnight/92 p-1.5 shadow-[0_20px_44px_-16px_rgba(7,26,59,0.75),inset_0_1px_0_rgba(255,255,255,0.12)] backdrop-blur-xl"
+      >
+        {items.map((item) => (
+          <NavPill key={item.href} item={item} active={isActive(item, path)} layoutId="nav-mobile" dark />
+        ))}
+      </nav>
+      <TactileButton
+        onClick={() => openComposer({ type: "expense" })}
+        className="pointer-events-auto grid size-[60px] shrink-0 place-items-center rounded-full bg-mint text-midnight shadow-[0_14px_30px_-10px_rgba(24,224,174,0.95),inset_0_1px_0_rgba(255,255,255,0.5)]"
+        aria-label="Registrar gasto"
+      >
+        <Plus className="size-7" strokeWidth={2.5} />
+      </TactileButton>
+    </div>
   );
 }

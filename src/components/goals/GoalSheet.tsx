@@ -64,7 +64,7 @@ function GoalForm({ goal, onDone }: { goal?: Goal; onDone: () => void }) {
                 setKind(k.kind);
                 if (!nameTouched) setName(k.name);
               }}
-              className={cn("pressable flex flex-col items-center gap-1.5 rounded-[16px] py-3 text-[12px] font-medium", kind === k.kind ? "bg-white/[0.09] text-off ring-1 ring-white/15" : "bg-white/[0.03] text-soft")}
+              className={cn("flex flex-col items-center gap-1.5 rounded-[22px] py-3 text-[13px] font-semibold transition-transform active:scale-95", kind === k.kind ? "bg-midnight text-white" : "bg-white text-ink-700 shadow-[0_6px_16px_-12px_rgba(22,80,180,0.5)]")}
             >
               <k.icon className="size-5" style={{ color: k.color }} />
               {k.label}
@@ -88,14 +88,14 @@ function GoalForm({ goal, onDone }: { goal?: Goal; onDone: () => void }) {
           <input className={inputClass} inputMode="decimal" value={target} onChange={(e) => setTarget(e.target.value)} placeholder="R$ 15.000" />
         </Field>
         <Field label="Até quando">
-          <input type="date" className={cn(inputClass, "px-3 [color-scheme:dark]")} value={date} min={today} onChange={(e) => setDate(e.target.value)} />
+          <input type="date" className={cn(inputClass, "px-3")} value={date} min={today} onChange={(e) => setDate(e.target.value)} />
         </Field>
       </div>
       <Field label="Aporte mensal automático" hint={suggestedMonthly ? `Para chegar no prazo: cerca de R$ ${formatNumber(suggestedMonthly, 0)}/mês` : undefined}>
         <div className="flex gap-2">
           <input className={inputClass} inputMode="decimal" value={monthly} onChange={(e) => setMonthly(e.target.value)} placeholder="R$ 600" />
           {suggestedMonthly > 0 && (
-            <button onClick={() => setMonthly(formatNumber(suggestedMonthly, 0))} className="pressable h-12 shrink-0 rounded-[14px] bg-white/[0.06] px-3 text-[13px] font-semibold text-off">
+            <button onClick={() => setMonthly(formatNumber(suggestedMonthly, 0))} className="h-13 shrink-0 rounded-full bg-midnight px-4 text-[14px] font-semibold text-white active:scale-95">
               Usar sugestão
             </button>
           )}
@@ -106,8 +106,8 @@ function GoalForm({ goal, onDone }: { goal?: Goal; onDone: () => void }) {
       </Button>
       {goal &&
         (confirmDelete ? (
-          <div className="flex items-center justify-between gap-3 rounded-[16px] bg-coral/10 p-3">
-            <p className="text-[13px] text-off">O histórico de aportes fica salvo. Excluir mesmo?</p>
+          <div className="flex items-center justify-between gap-3 rounded-[22px] bg-rose/10 p-4">
+            <p className="text-[14px] text-ink-900">O histórico de aportes fica salvo. Excluir mesmo?</p>
             <Button
               variant="danger"
               size="sm"
@@ -121,7 +121,7 @@ function GoalForm({ goal, onDone }: { goal?: Goal; onDone: () => void }) {
             </Button>
           </div>
         ) : (
-          <button onClick={() => setConfirmDelete(true)} className="text-[13px] font-medium text-muted hover:text-coral-light">
+          <button onClick={() => setConfirmDelete(true)} className="text-[14px] font-semibold text-ink-500 hover:text-rose-ink">
             Excluir meta
           </button>
         ))}

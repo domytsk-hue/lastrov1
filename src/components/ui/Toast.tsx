@@ -28,9 +28,9 @@ const ICON: Record<Tone, React.ReactNode> = {
 };
 
 const ICON_BG: Record<Tone, string> = {
-  success: "bg-green text-ink",
-  neutral: "bg-blue-light/20 text-blue-light",
-  attention: "bg-yellow/15 text-yellow",
+  success: "bg-mint text-midnight",
+  neutral: "bg-white/15 text-white",
+  attention: "bg-amber text-midnight",
 };
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
@@ -55,7 +55,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
       {children}
       <div
         aria-live="polite"
-        className="pointer-events-none fixed inset-x-0 top-0 z-[80] flex flex-col items-center gap-2 px-4 pt-[max(12px,env(safe-area-inset-top))] lg:top-auto lg:bottom-6 lg:items-end lg:pr-6"
+        className="pointer-events-none fixed inset-x-0 top-0 z-[80] flex flex-col items-center gap-2 px-4 pt-[max(12px,env(safe-area-inset-top))] lg:top-auto lg:bottom-8"
       >
         <AnimatePresence initial={false}>
           {items.map((t) => {
@@ -68,13 +68,13 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: -12, scale: 0.96, transition: { duration: 0.18 } }}
                 transition={{ type: "spring", stiffness: 420, damping: 34 }}
-                className="pointer-events-auto flex w-full max-w-sm items-start gap-3 rounded-2xl border border-white/10 bg-[#161a20]/95 p-3.5 pr-3 shadow-2xl shadow-black/60 backdrop-blur-xl"
+                className="pointer-events-auto flex w-full max-w-sm items-center gap-3 rounded-[28px] bg-midnight/95 p-3 pr-3 text-white shadow-[0_24px_50px_-18px_rgba(7,26,59,0.7),inset_0_1px_0_rgba(255,255,255,0.12)] backdrop-blur-xl"
                 role="status"
               >
-                <span className={cn("mt-0.5 grid size-7 shrink-0 place-items-center rounded-full", ICON_BG[tone])}>{ICON[tone]}</span>
+                <span className={cn("grid size-9 shrink-0 place-items-center rounded-full", ICON_BG[tone])}>{ICON[tone]}</span>
                 <div className="min-w-0 flex-1">
-                  <p className="text-[14px] font-semibold leading-snug text-off">{t.title}</p>
-                  {t.body && <p className="mt-0.5 text-[13px] leading-snug text-soft">{t.body}</p>}
+                  <p className="text-[15px] leading-snug font-semibold">{t.title}</p>
+                  {t.body && <p className="mt-0.5 text-[14px] leading-snug text-white/70">{t.body}</p>}
                 </div>
                 {t.action && (
                   <button
@@ -82,7 +82,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                       t.action!.onClick();
                       dismiss(t.id);
                     }}
-                    className="pressable shrink-0 rounded-xl px-3 py-1.5 text-[13px] font-semibold text-green hover:bg-white/5"
+                    className="shrink-0 rounded-full bg-white/10 px-4 py-2 text-[14px] font-semibold text-mint transition-transform hover:bg-white/15 active:scale-95"
                   >
                     {t.action.label}
                   </button>

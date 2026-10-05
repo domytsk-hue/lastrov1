@@ -6,7 +6,7 @@ export const CATEGORIES: Category[] = [
     name: "Alimentação",
     kind: "expense",
     icon: "utensils",
-    color: "#00D99B",
+    color: "#12B886",
     keywords: ["almoço", "almoco", "jantar", "café", "cafe", "mercado", "supermercado", "ifood", "delivery", "padaria", "restaurante", "lanche", "pizza", "feira", "açougue", "comida", "hamburguer", "sushi", "bar"],
   },
   {
@@ -14,7 +14,7 @@ export const CATEGORIES: Category[] = [
     name: "Transporte",
     kind: "expense",
     icon: "car",
-    color: "#5B8CFF",
+    color: "#3678F5",
     keywords: ["uber", "99", "gasolina", "combustível", "combustivel", "posto", "ônibus", "onibus", "metrô", "metro", "estacionamento", "pedágio", "pedagio", "taxi", "táxi", "etanol", "bilhete"],
   },
   {
@@ -22,7 +22,7 @@ export const CATEGORIES: Category[] = [
     name: "Moradia",
     kind: "expense",
     icon: "home",
-    color: "#8B6BFF",
+    color: "#6E56F8",
     fixed: true,
     keywords: ["aluguel", "condomínio", "condominio", "luz", "energia", "água", "agua", "gás", "gas", "internet", "iptu", "casa", "faxina", "diarista"],
   },
@@ -31,7 +31,7 @@ export const CATEGORIES: Category[] = [
     name: "Compras",
     kind: "expense",
     icon: "shopping-bag",
-    color: "#FF8A5B",
+    color: "#F08A4B",
     keywords: ["roupa", "tênis", "tenis", "amazon", "shopee", "mercado livre", "presente", "loja", "shopping", "eletrônico", "eletronico"],
   },
   {
@@ -39,7 +39,7 @@ export const CATEGORIES: Category[] = [
     name: "Saúde",
     kind: "expense",
     icon: "heart-pulse",
-    color: "#FF6B81",
+    color: "#F0566B",
     keywords: ["farmácia", "farmacia", "remédio", "remedio", "médico", "medico", "consulta", "dentista", "exame", "academia", "plano de saúde", "terapia", "psicólogo"],
   },
   {
@@ -47,7 +47,7 @@ export const CATEGORIES: Category[] = [
     name: "Lazer",
     kind: "expense",
     icon: "ticket",
-    color: "#FFC234",
+    color: "#E89A0C",
     keywords: ["cinema", "show", "ingresso", "viagem", "passeio", "festa", "balada", "jogo", "game", "teatro", "praia", "cerveja"],
   },
   {
@@ -55,7 +55,7 @@ export const CATEGORIES: Category[] = [
     name: "Assinaturas",
     kind: "expense",
     icon: "repeat",
-    color: "#C77DFF",
+    color: "#A35CF0",
     fixed: true,
     keywords: ["netflix", "spotify", "assinatura", "prime", "disney", "hbo", "youtube", "icloud", "chatgpt", "max", "globoplay", "deezer"],
   },
@@ -64,7 +64,7 @@ export const CATEGORIES: Category[] = [
     name: "Educação",
     kind: "expense",
     icon: "graduation-cap",
-    color: "#4FE3C1",
+    color: "#0EA5C6",
     fixed: true,
     keywords: ["curso", "livro", "faculdade", "escola", "inglês", "ingles", "aula", "mensalidade", "udemy", "alura"],
   },
@@ -73,7 +73,7 @@ export const CATEGORIES: Category[] = [
     name: "Outros",
     kind: "expense",
     icon: "circle-dashed",
-    color: "#AEB4BD",
+    color: "#7890AF",
     keywords: [],
   },
   {
@@ -81,7 +81,7 @@ export const CATEGORIES: Category[] = [
     name: "Salário",
     kind: "income",
     icon: "briefcase",
-    color: "#00D99B",
+    color: "#0FB98F",
     keywords: ["salário", "salario", "pagamento", "holerite"],
   },
   {
@@ -89,7 +89,7 @@ export const CATEGORIES: Category[] = [
     name: "Freelance",
     kind: "income",
     icon: "sparkles",
-    color: "#4FE3C1",
+    color: "#12B886",
     keywords: ["freela", "freelance", "projeto", "job", "cliente"],
   },
   {
@@ -97,7 +97,7 @@ export const CATEGORIES: Category[] = [
     name: "Rendimentos",
     kind: "income",
     icon: "trending-up",
-    color: "#5B8CFF",
+    color: "#3678F5",
     keywords: ["rendimento", "dividendo", "dividendos", "juros", "cashback"],
   },
   {
@@ -105,7 +105,7 @@ export const CATEGORIES: Category[] = [
     name: "Outras receitas",
     kind: "income",
     icon: "plus-circle",
-    color: "#AEB4BD",
+    color: "#7890AF",
     keywords: ["reembolso", "pix recebido", "venda", "presente recebido"],
   },
 ];

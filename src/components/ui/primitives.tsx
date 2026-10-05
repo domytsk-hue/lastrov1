@@ -3,33 +3,23 @@
 import { motion } from "framer-motion";
 import { ArrowRight, CircleAlert, CircleCheck, CircleX, TriangleAlert } from "lucide-react";
 import Link from "next/link";
+import { useId } from "react";
 import { getCategory } from "@/data/categories";
 import { cn } from "@/lib/cn";
+import { spring } from "@/lib/motion";
 import type { BudgetState, CategoryId } from "@/lib/types";
 import { categoryIcon } from "./CategoryIcon";
 
 /* ---------- Section header ---------- */
 
-export function SectionHeader({
-  title,
-  href,
-  linkLabel = "Ver tudo",
-  action,
-  className,
-}: {
-  title: string;
-  href?: string;
-  linkLabel?: string;
-  action?: React.ReactNode;
-  className?: string;
-}) {
+export function SectionHeader({ title, href, linkLabel = "Ver tudo", action, className }: { title: string; href?: string; linkLabel?: string; action?: React.ReactNode; className?: string }) {
   return (
-    <div className={cn("mb-3 flex items-center justify-between px-1", className)}>
-      <h2 className="font-display text-[17px] font-semibold tracking-[-0.01em] text-off">{title}</h2>
+    <div className={cn("mb-4 flex items-end justify-between gap-4 px-1", className)}>
+      <h2 className="font-display text-[24px] leading-tight font-semibold tracking-[-0.025em] text-ink-900 sm:text-[28px]">{title}</h2>
       {href ? (
-        <Link href={href} className="group flex items-center gap-1 rounded-lg px-1 py-1 text-[13px] font-medium text-soft hover:text-off">
+        <Link href={href} className="group inline-flex h-10 items-center gap-1.5 rounded-full bg-white/70 px-4 text-[14px] font-semibold text-ink-900 shadow-[inset_0_1px_0_#fff,0_8px_20px_-14px_rgba(22,80,180,0.5)]">
           {linkLabel}
-          <ArrowRight className="size-3.5 transition-transform group-hover:translate-x-0.5" />
+          <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />
         </Link>
       ) : (
         action
@@ -38,7 +28,7 @@ export function SectionHeader({
   );
 }
 
-/* ---------- Segmented control ---------- */
+/* ---------- Segmented control: the active pill slides ---------- */
 
 export function Segmented<T extends string>({
   value,
@@ -47,6 +37,7 @@ export function Segmented<T extends string>({
   className,
   size = "md",
   label,
+  tone = "light",
 }: {
   value: T;
   onChange: (v: T) => void;
@@ -54,10 +45,11 @@ export function Segmented<T extends string>({
   className?: string;
   size?: "sm" | "md";
   label: string;
+  tone?: "light" | "navy";
 }) {
-  const layoutId = `seg-${label}`;
+  const layoutId = useId();
   return (
-    <div role="radiogroup" aria-label={label} className={cn("relative flex rounded-full bg-white/[0.05] p-1", className)}>
+    <div role="radiogroup" aria-label={label} className={cn("relative flex rounded-full p-1", tone === "light" ? "bg-ink-900/[0.06]" : "bg-white/10", className)}>
       {options.map((o) => {
         const active = o.value === value;
         return (
@@ -67,18 +59,12 @@ export function Segmented<T extends string>({
             aria-checked={active}
             onClick={() => onChange(o.value)}
             className={cn(
-              "relative flex-1 rounded-full font-medium whitespace-nowrap transition-colors",
-              size === "md" ? "h-9 px-3.5 text-[14px]" : "h-8 px-3 text-[13px]",
-              active ? "text-ink" : "text-soft hover:text-off",
+              "relative flex-1 rounded-full font-semibold whitespace-nowrap transition-colors",
+              size === "md" ? "h-11 px-4 text-[15px]" : "h-9 px-3 text-[14px]",
+              active ? (tone === "light" ? "text-ink-900" : "text-midnight") : tone === "light" ? "text-ink-500 hover:text-ink-900" : "text-white/70 hover:text-white",
             )}
           >
-            {active && (
-              <motion.span
-                layoutId={layoutId}
-                className="absolute inset-0 rounded-full bg-off"
-                transition={{ type: "spring", stiffness: 500, damping: 40 }}
-              />
-            )}
+            {active && <motion.span layoutId={layoutId} className="absolute inset-0 rounded-full bg-white shadow-[0_6px_16px_-8px_rgba(22,80,180,0.5)]" transition={spring.snappy} />}
             <span className="relative">{o.label}</span>
           </button>
         );
@@ -87,64 +73,45 @@ export function Segmented<T extends string>({
   );
 }
 
-/* ---------- Category chip ---------- */
+/* ---------- Category chip: the selected state morphs between chips ---------- */
 
-export function CategoryChip({
-  id,
-  selected,
-  onClick,
-  compact,
-}: {
-  id: CategoryId;
-  selected?: boolean;
-  onClick?: () => void;
-  compact?: boolean;
-}) {
+export function CategoryChip({ id, selected, onClick, compact, layoutGroup }: { id: CategoryId; selected?: boolean; onClick?: () => void; compact?: boolean; layoutGroup?: string }) {
   const cat = getCategory(id);
   const Icon = categoryIcon(id);
   return (
-    <button
+    <motion.button
       type="button"
       onClick={onClick}
       aria-pressed={selected}
-      className={cn(
-        "pressable flex shrink-0 items-center gap-2 rounded-full border text-[14px] font-medium transition-colors",
-        compact ? "h-9 px-3" : "h-10 pl-2 pr-3.5",
-        selected ? "border-transparent text-ink" : "border-white/[0.08] bg-white/[0.03] text-soft hover:text-off",
-      )}
-      style={selected ? { background: cat.color } : undefined}
+      whileTap={{ scale: 0.95 }}
+      className={cn("relative flex shrink-0 items-center gap-2 rounded-full font-semibold", compact ? "h-11 pr-4 pl-1.5 text-[14px]" : "h-12 pr-4 pl-2 text-[15px]", selected ? "text-white" : "bg-white text-ink-700 shadow-[0_6px_16px_-10px_rgba(22,80,180,0.45)]")}
     >
-      <span
-        className="grid size-6 place-items-center rounded-full"
-        style={{ background: selected ? "rgba(0,0,0,0.14)" : `${cat.color}22`, color: selected ? "#050607" : cat.color }}
-      >
-        <Icon className="size-3.5" strokeWidth={2.2} />
+      {selected && <motion.span layoutId={layoutGroup ?? "chip-selected"} className="absolute inset-0 rounded-full bg-midnight" transition={spring.snappy} />}
+      <span className="relative grid size-8 place-items-center rounded-full" style={{ background: selected ? cat.color : `${cat.color}24`, color: selected ? "#fff" : cat.color }}>
+        <Icon className="size-4" strokeWidth={2.2} />
       </span>
-      {cat.name}
-    </button>
+      <span className="relative">{cat.name}</span>
+    </motion.button>
   );
 }
 
-/* ---------- Budget state badge (never colour-only) ---------- */
+/* ---------- Budget state (never colour-only) ---------- */
 
 export const STATE_COLOR: Record<BudgetState, string> = {
-  healthy: "#00D99B",
-  attention: "#FFC234",
-  critical: "#FF8A5B",
-  exceeded: "#FF455D",
+  healthy: "#0FB98F",
+  attention: "#E89A0C",
+  critical: "#F08A4B",
+  exceeded: "#F0566B",
 };
 
 const STATE_ICON = { healthy: CircleCheck, attention: CircleAlert, critical: TriangleAlert, exceeded: CircleX };
-const STATE_LABEL: Record<BudgetState, string> = { healthy: "Saudável", attention: "Atenção", critical: "Crítico", exceeded: "Excedido" };
+const STATE_LABEL: Record<BudgetState, string> = { healthy: "No ritmo", attention: "Atenção", critical: "Crítico", exceeded: "Passou" };
 
 export function StateBadge({ state, className }: { state: BudgetState; className?: string }) {
   const Icon = STATE_ICON[state];
   return (
-    <span
-      className={cn("inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[12px] font-semibold", className)}
-      style={{ color: STATE_COLOR[state], background: `${STATE_COLOR[state]}1a` }}
-    >
-      <Icon className="size-3.5" strokeWidth={2.4} />
+    <span className={cn("inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-[13px] font-semibold", className)} style={{ color: STATE_COLOR[state], background: `${STATE_COLOR[state]}1f` }}>
+      <Icon className="size-4" strokeWidth={2.4} />
       {STATE_LABEL[state]}
     </span>
   );
@@ -152,25 +119,13 @@ export function StateBadge({ state, className }: { state: BudgetState; className
 
 /* ---------- Empty state ---------- */
 
-export function EmptyState({
-  title,
-  body,
-  action,
-  icon,
-  className,
-}: {
-  title: string;
-  body?: string;
-  action?: React.ReactNode;
-  icon?: React.ReactNode;
-  className?: string;
-}) {
+export function EmptyState({ title, body, action, icon, className }: { title: string; body?: string; action?: React.ReactNode; icon?: React.ReactNode; className?: string }) {
   return (
-    <div className={cn("flex flex-col items-center px-6 py-10 text-center", className)}>
-      {icon && <div className="mb-4 text-muted">{icon}</div>}
-      <p className="font-display text-[19px] font-semibold tracking-[-0.01em]">{title}</p>
-      {body && <p className="mt-1.5 max-w-xs text-[14px] leading-relaxed text-soft">{body}</p>}
-      {action && <div className="mt-5">{action}</div>}
+    <div className={cn("flex flex-col items-center px-6 py-12 text-center", className)}>
+      {icon && <div className="mb-4 text-ink-400">{icon}</div>}
+      <p className="font-display text-[24px] font-semibold tracking-[-0.02em] text-ink-900">{title}</p>
+      {body && <p className="mt-2 max-w-sm text-[15px] leading-relaxed text-ink-500">{body}</p>}
+      {action && <div className="mt-6">{action}</div>}
     </div>
   );
 }
@@ -178,7 +133,7 @@ export function EmptyState({
 /* ---------- Skeleton ---------- */
 
 export function Skeleton({ className }: { className?: string }) {
-  return <div className={cn("skeleton rounded-2xl", className)} aria-hidden />;
+  return <div className={cn("skeleton rounded-[28px]", className)} aria-hidden />;
 }
 
 /* ---------- Buttons ---------- */
@@ -189,19 +144,20 @@ export function Button({
   size = "md",
   className,
   ...rest
-}: React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: "primary" | "secondary" | "ghost" | "danger"; size?: "md" | "lg" | "sm" }) {
+}: React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: "primary" | "mint" | "secondary" | "ghost" | "danger"; size?: "md" | "lg" | "sm" }) {
   return (
     <button
       {...rest}
       className={cn(
-        "pressable inline-flex items-center justify-center gap-2 rounded-[16px] font-semibold disabled:pointer-events-none disabled:opacity-40",
-        size === "lg" && "h-14 px-6 text-[16px]",
-        size === "md" && "h-12 px-5 text-[15px]",
-        size === "sm" && "h-9 rounded-[12px] px-3.5 text-[13px]",
-        variant === "primary" && "bg-green text-ink hover:bg-green-light",
-        variant === "secondary" && "bg-white/[0.07] text-off hover:bg-white/[0.11]",
-        variant === "ghost" && "text-soft hover:bg-white/[0.05] hover:text-off",
-        variant === "danger" && "bg-coral/12 text-coral-light hover:bg-coral/20",
+        "inline-flex items-center justify-center gap-2 rounded-full font-semibold transition-transform duration-150 active:scale-[0.97] disabled:pointer-events-none disabled:opacity-40",
+        size === "lg" && "h-14 px-7 text-[16px]",
+        size === "md" && "h-12 px-6 text-[15px]",
+        size === "sm" && "h-10 px-4 text-[14px]",
+        variant === "primary" && "bg-midnight text-white shadow-[0_12px_26px_-12px_rgba(7,26,59,0.8)] hover:bg-deep",
+        variant === "mint" && "bg-mint text-midnight shadow-[0_12px_26px_-12px_rgba(24,224,174,0.9)]",
+        variant === "secondary" && "bg-white text-ink-900 shadow-[0_8px_20px_-12px_rgba(22,80,180,0.5)] hover:bg-snow",
+        variant === "ghost" && "text-ink-700 hover:bg-ink-900/5",
+        variant === "danger" && "bg-rose/10 text-rose-ink hover:bg-rose/15",
         className,
       )}
     >
@@ -210,15 +166,15 @@ export function Button({
   );
 }
 
-/* ---------- Page header ---------- */
+/* ---------- Page header: big, editorial ---------- */
 
 export function PageHeader({ eyebrow, title, action, children }: { eyebrow?: string; title: string; action?: React.ReactNode; children?: React.ReactNode }) {
   return (
-    <header className="mb-6 pt-2 lg:mb-8 lg:pt-4">
+    <header className="mb-8 px-1 pt-1 lg:mb-10">
       <div className="flex items-end justify-between gap-4">
         <div>
-          {eyebrow && <p className="eyebrow mb-1.5">{eyebrow}</p>}
-          <h1 className="font-display text-[30px] font-semibold leading-tight tracking-[-0.03em] lg:text-[36px]">{title}</h1>
+          {eyebrow && <p className="mb-1.5 text-[15px] font-medium text-ink-500">{eyebrow}</p>}
+          <h1 className="font-display text-[36px] leading-[1.05] font-semibold tracking-[-0.035em] text-ink-900 lg:text-[48px]">{title}</h1>
         </div>
         {action}
       </div>
@@ -232,12 +188,12 @@ export function PageHeader({ eyebrow, title, action, children }: { eyebrow?: str
 export function Field({ label, children, hint }: { label: string; children: React.ReactNode; hint?: string }) {
   return (
     <label className="block">
-      <span className="mb-1.5 block text-[13px] font-medium text-soft">{label}</span>
+      <span className="mb-2 block text-[14px] font-semibold text-ink-700">{label}</span>
       {children}
-      {hint && <span className="mt-1 block text-[12px] text-muted">{hint}</span>}
+      {hint && <span className="mt-1.5 block text-[13px] text-ink-500">{hint}</span>}
     </label>
   );
 }
 
 export const inputClass =
-  "h-12 w-full rounded-[14px] border border-white/[0.08] bg-white/[0.04] px-4 text-[15px] text-off placeholder:text-muted outline-none transition-colors focus:border-green/60 focus:bg-white/[0.06]";
+  "h-13 w-full rounded-[20px] bg-white px-4 text-[16px] text-ink-900 placeholder:text-ink-400 outline-none shadow-[inset_0_0_0_1.5px_rgba(23,61,145,0.08),0_6px_16px_-12px_rgba(22,80,180,0.4)] transition-shadow focus:shadow-[inset_0_0_0_2px_#3678F5,0_6px_16px_-12px_rgba(22,80,180,0.4)]";
