@@ -50,6 +50,13 @@ Requests more than 300 s from Lastro's clock are rejected; comparison is constan
 
 ## Centralis → Lastro: commands
 
+Centralis Hub sends these automatically ("Integrações → Comandos para os sistemas" in
+Centralis): every affiliate promotion, edit, commission change, suspension, reactivation
+and every change to an affiliate's commission figures. It signs each command with the
+secret it generated for Lastro (`CENTRALIS_WEBHOOK_SECRET` here), delivers them in order
+per affiliate and retries with backoff. If Lastro answers `affiliate_not_found` to an
+update, Centralis resends the full profile as `affiliate.promote`.
+
 `POST /api/integrations/centralis/actions` (signed). Envelope:
 
 ```json
