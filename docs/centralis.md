@@ -159,17 +159,18 @@ snapshotted on the charge.
 
 ## Payments
 
-A payment exists only when a gateway webhook is verified
-(`POST /api/payments/webhook/:provider`). Success pages, client calls or a pending payment
-create nothing. Each gateway transaction id becomes at most one charge, so duplicated
-webhooks produce one purchase. Approving an order, releasing the plan and queueing
+A payment exists only when the gateway confirms it — a verified webhook
+(`POST /api/payments/webhook/:provider`) or an authenticated server-side status query.
+Success pages, client calls or a pending payment create nothing. The confirmed amount and
+currency must match the order, or the payment goes to review without access. Each gateway
+transaction id becomes at most one charge and one access entitlement, so duplicated webhooks
+produce one purchase. Approving the order, granting access, mirroring the plan and queueing
 `purchase` happen in one database transaction.
 
-Gateways are adapters (`src/server/payments/provider.ts`): implement `createCheckout` and
-`parseWebhook` for Stripe / Mercado Pago / Asaas / Pagar.me and register it in
-`registry.ts`. The `sandbox` adapter (HMAC-signed with `PAYMENT_SANDBOX_SECRET`, refused in
-production) exercises the whole flow until a real gateway is chosen. The plan price always
-comes from `lastro.plans`, never from the browser.
+Gateways are adapters (`src/server/payments/provider.ts`), registered in `registry.ts`. The
+`sandbox` adapter exercises the whole flow in isolated environments only. Prices come from the
+plan catalog (`src/config/plans.ts`), never from the browser. Checkout, plan access, the
+paywall switch and the gateway checklist are in [`payments.md`](payments.md).
 
 ## Affiliate area
 
@@ -189,7 +190,8 @@ src/server/auth/accounts.ts     accounts and sessions
 src/server/centralis/           client, signature, serializer, outbox, actions, user sync, runtime
 src/server/affiliates/          affiliate profiles and the "me" view
 src/server/tracking/            visitors, sessions, clicks, last-click attribution
-src/server/payments/            provider contract, sandbox, OrderService
+src/server/payments/            provider contract, sandbox, checkout (orders), OrderService (confirmations)
+src/server/access/              plan entitlements and the per-request access check
 src/app/api/…                   route handlers (thin)
 src/app/tracker.tsx             first-party page-view / ?ref= tracker
 src/components/product/profile/AffiliateSection.tsx

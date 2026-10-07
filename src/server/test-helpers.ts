@@ -8,7 +8,8 @@ import type { CentralisConfig } from "./env.ts";
 import { handleCentralisAction } from "./centralis/actions.ts";
 import { signUp } from "./auth/accounts.ts";
 import { ensureSession, ensureVisitor, recordAffiliateClick } from "./tracking/service.ts";
-import { handlePaymentEvent, startCheckout } from "./payments/orders.ts";
+import { handlePaymentEvent } from "./payments/orders.ts";
+import { createOrder } from "./payments/checkout.ts";
 
 export const PRODUCT_ID = "7f1c9c1e-5a0b-4d7e-9b7a-6a1f3e2d4c5b";
 
@@ -56,10 +57,19 @@ export function landWithRef(db: Db, config: CentralisConfig, b: { visitorId: str
   return recordAffiliateClick(db, config, b.visitorId, b.sessionId, { code, landingPage: "/", referrer: "https://instagram.com/", utm: { source: "instagram" } }, at);
 }
 
+/** A gateway as far as order creation cares: its id and the methods it offers. */
+export const SANDBOX = { id: "sandbox", methods: ["pix", "card"] as ("pix" | "card")[] };
+
+/** Opens (or reuses) the pending order for a plan, as POST /api/checkout does. */
+export async function openOrder(db: Db, config: CentralisConfig, userId: string, plan = "vitalicio", opts: { visitorId?: string | null; method?: string; key?: string; at?: Date } = {}) {
+  const r = await createOrder(db, config, { userId, planId: plan, method: opts.method ?? "pix", idempotencyKey: opts.key ?? `key_${randomUUID()}`, visitorId: opts.visitorId ?? null, provider: SANDBOX }, opts.at);
+  if (!r.ok) throw new Error(r.error);
+  return { orderId: r.order.id, plan: r.plan, reused: r.reused };
+}
+
 /** Checkout + gateway confirmation through the sandbox event shape. */
 export async function buy(db: Db, config: CentralisConfig, userId: string, opts: { plan?: string; visitorId?: string | null; at?: Date; tx?: string } = {}) {
-  const started = await startCheckout(db, config, userId, opts.plan ?? "vitalicio", "sandbox", opts.visitorId ?? null);
-  if (!started.ok) throw new Error(started.error);
+  const started = await openOrder(db, config, userId, opts.plan ?? "vitalicio", { visitorId: opts.visitorId, at: opts.at });
   const tx = opts.tx ?? `txn_${randomUUID()}`;
   const result = await handlePaymentEvent(db, config, "sandbox", {
     providerEventId: `evt_${randomUUID()}`,

@@ -1,13 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { action, browser, buy, freshDb, landWithRef, newUser, outbox, promote, testConfig } from "../test-helpers.ts";
+import { action, browser, buy, freshDb, landWithRef, newUser, openOrder, outbox, promote, testConfig } from "../test-helpers.ts";
 import { handleCentralisAction } from "../centralis/actions.ts";
 import { flushOutbox } from "../centralis/outbox.ts";
 import { findForbiddenKeys } from "../centralis/serialize.ts";
 import { myAffiliate } from "../affiliates/me.ts";
 import { signIn, signUp, userForSessionToken } from "../auth/accounts.ts";
-import { handlePaymentEvent, startCheckout } from "./orders.ts";
+import { handlePaymentEvent } from "./orders.ts";
 import { createSandboxProvider, signSandboxWebhook } from "./sandbox.ts";
 
 const DAY = 86_400_000;
@@ -144,8 +144,7 @@ test("checkout started or payment pending is not a purchase", async () => {
   const db = await freshDb();
   const config = testConfig();
   const userId = await newUser(db, config, "Eva");
-  const started = await startCheckout(db, config, userId, "vitalicio", "sandbox", null);
-  assert.ok(started.ok);
+  const started = await openOrder(db, config, userId, "vitalicio");
   assert.equal((await outbox(db, "checkout.started")).length, 1);
   const r = await handlePaymentEvent(db, config, "sandbox", { providerEventId: "evt_p", type: "payment.pending", orderId: started.orderId, transactionId: "tx_p", occurredAt: new Date() });
   assert.equal(r, "ignored");
@@ -160,8 +159,7 @@ test("duplicate webhook (same event, or same transaction under a new event id) c
   const db = await freshDb();
   const config = testConfig();
   const userId = await newUser(db, config, "Fábio");
-  const started = await startCheckout(db, config, userId, "vitalicio", "sandbox", null);
-  assert.ok(started.ok);
+  const started = await openOrder(db, config, userId, "vitalicio");
   const ev = { providerEventId: "evt_1", type: "payment.approved" as const, orderId: started.orderId, transactionId: "tx_1", amountMinor: 9990, currency: "BRL", occurredAt: new Date() };
   assert.equal(await handlePaymentEvent(db, config, "sandbox", ev), "applied");
   assert.equal(await handlePaymentEvent(db, config, "sandbox", ev), "duplicate");

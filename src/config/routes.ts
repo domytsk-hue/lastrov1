@@ -16,6 +16,15 @@ export const AUTH_ROUTES = {
   cadastro: "/cadastro",
 } as const;
 
+/** Plan checkout: authenticated, between sign-up and the app. */
+export const CHECKOUT_ROUTE = "/checkout";
+
+/**
+ * Internal destinations a `?next=` may name after sign-in. Anything else (other paths, other
+ * sites) is ignored — no open redirects.
+ */
+export const safeNext = (raw: string | null | undefined): string | null => (raw === CHECKOUT_ROUTE ? raw : null);
+
 /** The authenticated financial product lives under /app. */
 export const PRODUCT_BASE = "/app";
 

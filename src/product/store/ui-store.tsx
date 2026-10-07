@@ -41,7 +41,8 @@ interface UIContextValue {
 
 const UIContext = createContext<UIContextValue | null>(null);
 
-export function UIProvider({ children }: { children: React.ReactNode }) {
+/** `composerEnabled` is false while the account has no plan access: the money tools stay closed. */
+export function UIProvider({ children, composerEnabled = true }: { children: React.ReactNode; composerEnabled?: boolean }) {
   const [privacy, setPrivacy] = useState(false);
   const [composer, setComposer] = useState<ComposerRequest | null>(null);
   const [flows, setFlows] = useState<Flow[]>([]);
@@ -63,11 +64,12 @@ export function UIProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
-  const openComposer = useCallback((req: ComposerRequest = {}) => setComposer(req), []);
+  const openComposer = useCallback((req: ComposerRequest = {}) => composerEnabled && setComposer(req), [composerEnabled]);
   const closeComposer = useCallback(() => setComposer(null), []);
 
   // Keyboard: "n" opens the composer on desktop.
   useEffect(() => {
+    if (!composerEnabled) return;
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
       if (target.closest("input, textarea, select, [contenteditable=true]")) return;
@@ -78,7 +80,7 @@ export function UIProvider({ children }: { children: React.ReactNode }) {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  }, [composerEnabled]);
 
   const value = useMemo(
     () => ({ flows, emitFlow, endFlow, privacy, togglePrivacy, composer, openComposer, closeComposer }),

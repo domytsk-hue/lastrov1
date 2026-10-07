@@ -5,7 +5,7 @@ import { ArrowDownLeft, ArrowRight, ArrowUpRight, Minus, PiggyBank, TrendingUp }
 import Link from "next/link";
 import { useAuth } from "@/auth/auth-store";
 import { cn } from "@/lib/cn";
-import { AUTH_ROUTES, ROUTES } from "@/config/routes";
+import { AUTH_ROUTES, CHECKOUT_ROUTE, ROUTES } from "@/config/routes";
 import { spring } from "@/design-system/motion";
 import { AnimatedMoney } from "@/components/shared/motion/AnimatedNumber";
 import { Capsule, FinancialSurface, useMagnetic } from "@/components/shared/surfaces/Surface";
@@ -36,7 +36,7 @@ export function PrimaryCta({
   return (
     <MotionLink
       ref={m.ref}
-      href={signedIn ? ROUTES.home : plan ? `${AUTH_ROUTES.cadastro}?plano=${plan}` : AUTH_ROUTES.cadastro}
+      href={signedIn ? (plan && !session.demo ? `${CHECKOUT_ROUTE}?plano=${plan}` : ROUTES.home) : plan ? `${AUTH_ROUTES.cadastro}?plano=${plan}` : AUTH_ROUTES.cadastro}
       whileTap={{ scale: 0.97 }}
       animate={{ x: m.offset.x, y: m.offset.y }}
       transition={spring.snappy}

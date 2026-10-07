@@ -16,6 +16,7 @@ src/
 │   │   ├── layout.tsx           AuthScreen (mounted once) + redirect if signed in
 │   │   ├── login/page.tsx
 │   │   └── cadastro/page.tsx
+│   ├── (product)/checkout/      AUTHENTICATED plan checkout → /checkout
 │   └── (product)/app/           AUTHENTICATED product     → /app/*
 │       ├── layout.tsx           ProductShell: session gate, finance + UI stores, nav, composer
 │       ├── page.tsx             Home
@@ -50,6 +51,7 @@ src/
 │   └── store/                   finance store, reducer, UI store
 ├── auth/                        rules (+ tests) and the session store / AuthService seam
 ├── config/routes.ts             the URL map — every path is written here, nowhere else
+├── config/plans.ts              the plan catalog (ids, prices, benefits) — one source of truth
 └── lib/                         base utilities: cn, format, geometry, image
 ```
 
@@ -79,9 +81,11 @@ product ───┘                        ├─▶ shared ─▶ design-syste
 
 ## Route protection
 
-Accounts live on the server (Supabase Postgres) with an HTTP-only session cookie; the client keeps a cached copy of the session so the app opens instantly and keeps working offline, and `/api/auth/session` corrects it when reachable. `/app/*` stays protected client-side by `ProductShell` (no session → `/login`) because financial data still lives on the device and the demo account has no server session; every server endpoint authenticates the cookie itself. Device-only accounts from before migrate to the server at their next sign-in.
+Accounts live on the server (Supabase Postgres) with an HTTP-only session cookie; the client keeps a cached copy of the session so the app opens instantly, and `/api/auth/session` corrects it when reachable. `/app/*` is protected client-side by `ProductShell` (no session → `/login`) because financial data still lives on the device and the demo account has no server session; every server endpoint authenticates the cookie itself. Device-only accounts from before migrate to the server at their next sign-in.
 
-The server side and the Centralis Hub integration are described in [`centralis.md`](centralis.md).
+Plan access (paywall) is decided on the server: the `/app` layout computes it for the signed-in account and every paid page checks it again per request, rendering the locked state instead of the module when there is no access. `/checkout` sits between sign-up and the app. See [`payments.md`](payments.md).
+
+The one exception to "UI never imports `server`": server route files of the product (`app/(product)/**`, no `"use client"`) may import `server/access/**` for that check. They render only on the server, and server modules import `server-only`, so a client file importing them fails the build.
 
 ## Product demos on the marketing site
 

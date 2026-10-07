@@ -6,6 +6,7 @@ import { ArrowRight, BadgePercent, Check, KeyRound, Landmark, MonitorSmartphone,
 import { cn } from "@/lib/cn";
 import { formatNumber } from "@/lib/format";
 import { AUTH_ROUTES } from "@/config/routes";
+import { PLANS, PLAN_BENEFITS, toMajorUnits, type PlanId } from "@/config/plans";
 import { ease } from "@/design-system/motion";
 import { Orbit } from "@/components/shared/data-viz/Orbit";
 import { DEMO_DIMENSIONS } from "./demo-data";
@@ -143,14 +144,15 @@ export function TrustSection() {
 /* Plans — lifetime in front, monthly behind it as the reference price */
 /* ------------------------------------------------------------------ */
 
+/** Prices come from the plan catalog (src/config/plans.ts) — the same one checkout and server use. */
 export const PRICING = {
-  monthly: 19.9,
-  lifetime: 99.9,
+  monthly: toMajorUnits(PLANS.mensal.amountMinor),
+  lifetime: toMajorUnits(PLANS.vitalicio.amountMinor),
 } as const;
 const YEARLY = Math.round(PRICING.monthly * 12 * 100) / 100; // 238,80
 const SAVING = Math.round((YEARLY - PRICING.lifetime) * 100) / 100; // 138,90
 
-const INCLUDED = ["Orçamentos, metas e reserva", "Patrimônio e investimentos", "Aulas no momento certo"];
+const INCLUDED = PLAN_BENEFITS;
 
 /** "R$ 99" + ",90" — the product's money rhythm, big units and small cents. */
 function Price({ value, className, cents = "text-[0.42em]" }: { value: number; className?: string; cents?: string }) {
@@ -164,7 +166,6 @@ function Price({ value, className, cents = "text-[0.42em]" }: { value: number; c
   );
 }
 
-type PlanId = "mensal" | "vitalicio";
 
 /** The radio dot in each card's header — the keyboard target of the plan picker. */
 function PlanRadio({ checked, onSelect, label, tone }: { checked: boolean; onSelect: () => void; label: string; tone: "light" | "dark" }) {
@@ -231,7 +232,7 @@ export function PricingSection() {
               <p id="plan-monthly" className="text-[13px] font-bold tracking-[0.14em] text-ink-500 uppercase">
                 Mensal
               </p>
-              <PlanRadio checked={monthly} onSelect={() => setPlan("mensal")} label="Plano mensal, R$ 19,90 por mês" tone="dark" />
+              <PlanRadio checked={monthly} onSelect={() => setPlan("mensal")} label={`Plano mensal, ${PLANS.mensal.priceLabel}`} tone="dark" />
             </div>
             <p className="mt-3 text-ink-900">
               <Price value={PRICING.monthly} className="text-[48px] leading-none" />
@@ -270,7 +271,7 @@ export function PricingSection() {
                 </p>
                 <span className="flex items-center gap-2">
                   <span className="rounded-full bg-mint px-3 py-1 text-[12px] font-bold text-midnight">Mais vantajoso</span>
-                  <PlanRadio checked={!monthly} onSelect={() => setPlan("vitalicio")} label="Plano vitalício, R$ 99,90 pagamento único" tone="light" />
+                  <PlanRadio checked={!monthly} onSelect={() => setPlan("vitalicio")} label={`Plano vitalício, ${PLANS.vitalicio.priceLabel}`} tone="light" />
                 </span>
               </div>
 

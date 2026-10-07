@@ -7,11 +7,30 @@ import { centralisLog } from "./log.ts";
 import { flushOutbox } from "./outbox.ts";
 import { verifyRequest } from "./signature.ts";
 import { continueInitialSync } from "./user-sync.ts";
+import { expireLapsedPlans } from "../access/entitlements.ts";
+import { processRenewalCancellations } from "../payments/checkout.ts";
+import { activePaymentProvider } from "../payments/registry.ts";
 
-/** One bounded drain: a step of the initial sync, then delivery rounds of 50 events (≤ 1,000). */
+/**
+ * Scheduled upkeep that must not depend on anyone opening the app: monthly plans that ran
+ * out are mirrored to the user record (access itself already ended by date), and renewals
+ * still to be cancelled after an upgrade are retried.
+ */
+async function billingUpkeep() {
+  const db = await getDb();
+  const expired = await expireLapsedPlans(db, centralisConfig());
+  const cancellations = await processRenewalCancellations(db, activePaymentProvider());
+  return { expired, cancellations };
+}
+
+/** One bounded drain: billing upkeep, a step of the initial sync, then delivery rounds of 50 events (≤ 1,000). */
 export async function drainOutbox(rounds = 20) {
   const config = centralisConfig();
-  if (!config.enabled) return { enabled: false as const };
+  const billing = await billingUpkeep().catch(() => {
+    centralisLog("warn", "billing upkeep failed");
+    return null;
+  });
+  if (!config.enabled) return { enabled: false as const, billing };
   const db = await getDb();
   const initialSync = await continueInitialSync(db, config);
   const client = createCentralisClient(config);
@@ -23,7 +42,7 @@ export async function drainOutbox(rounds = 20) {
     pendingErrors += r.retried + r.failed;
     if (r.claimed === 0 || r.sent === 0) break;
   }
-  return { enabled: true as const, initialSync, sent, errors: pendingErrors };
+  return { enabled: true as const, billing, initialSync, sent, errors: pendingErrors };
 }
 
 /**

@@ -19,7 +19,8 @@ export function AuthScreen() {
   const pathname = usePathname();
   // One screen, two URLs: /login and /cadastro. The tab follows the URL.
   const mode: Mode = pathname === AUTH_ROUTES.cadastro ? "cadastro" : "entrar";
-  const setMode = (m: Mode) => router.replace(m === "cadastro" ? AUTH_ROUTES.cadastro : AUTH_ROUTES.login, { scroll: false });
+  // The query (?next=, ?plano=) travels with the tab switch.
+  const setMode = (m: Mode) => router.replace(`${m === "cadastro" ? AUTH_ROUTES.cadastro : AUTH_ROUTES.login}${typeof window === "undefined" ? "" : window.location.search}`, { scroll: false });
   const reduce = useReducedMotion();
 
   return (
@@ -156,9 +157,11 @@ function AuthForm({ mode, onSwitch }: { mode: Mode; onSwitch: (m: Mode) => void 
       setFormError(r.error);
       return;
     }
+    // Heading to the checkout (a plan was chosen), the "first expense" tip would be premature.
+    const choosingPlan = /[?&](plano|next)=/.test(window.location.search);
     toast.show(
       signup
-        ? { title: `Conta criada, ${firstName(r.value.name)}.`, body: "Registre seu primeiro gasto e o Lastro começa a entender seu ritmo." }
+        ? { title: `Conta criada, ${firstName(r.value.name)}.`, body: choosingPlan ? undefined : "Registre seu primeiro gasto e o Lastro começa a entender seu ritmo." }
         : { title: `Olá de novo, ${firstName(r.value.name)}.` },
     );
   };
@@ -264,7 +267,8 @@ function AuthForm({ mode, onSwitch }: { mode: Mode; onSwitch: (m: Mode) => void 
   );
 }
 
-function TextField({
+/** The Lastro text field (also used by the checkout form). */
+export function TextField({
   label,
   icon,
   value,
@@ -285,7 +289,7 @@ function TextField({
   hint?: string;
   trailing?: React.ReactNode;
   type?: string;
-} & Pick<React.InputHTMLAttributes<HTMLInputElement>, "autoComplete" | "autoFocus" | "inputMode" | "placeholder">) {
+} & Pick<React.InputHTMLAttributes<HTMLInputElement>, "autoComplete" | "autoFocus" | "inputMode" | "placeholder" | "readOnly" | "name" | "maxLength">) {
   const id = useId();
   return (
     <div>
@@ -296,6 +300,7 @@ function TextField({
         className={cn(
           "flex h-14 items-center gap-2 rounded-full bg-white pr-2 pl-5 shadow-[0_8px_20px_-14px_rgba(22,80,180,0.5)] transition-shadow",
           error ? "ring-2 ring-rose/60" : "focus-within:ring-2 focus-within:ring-electric",
+          rest.readOnly && "bg-white/60 shadow-none",
         )}
       >
         <span className="text-ink-400" aria-hidden>

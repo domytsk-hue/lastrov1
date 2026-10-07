@@ -10,6 +10,10 @@
  *               so secrets and the database can't leak into a browser bundle
  *   lib, design-system → nothing above them
  *
+ * One exception: SERVER route files of the product (app/(product)/**, without "use client")
+ * may import server/access/** — the per-request access check. They render on the server only,
+ * and server modules import "server-only", so a client file importing them fails the build.
+ *
  * Run: npm run check:boundaries
  */
 import { readdirSync, readFileSync, statSync } from "node:fs";
@@ -67,11 +71,13 @@ for (const file of walk(SRC)) {
   const allowed = ALLOWED[layer];
   if (!allowed) continue;
   const code = readFileSync(file, "utf8");
+  const serverRoute = relative(SRC, file).replaceAll("\\", "/").startsWith("app/(product)/") && !/^\s*["']use client["']/.test(code);
   for (const m of code.matchAll(/(?:from|import)\s*\(?\s*["']([^"']+)["']/g)) {
     const target = resolveImport(file, m[1]);
     if (!target || !target.startsWith(SRC)) continue;
     const targetLayer = layerOf(target);
-    if (!allowed.includes(targetLayer)) {
+    const accessCheck = serverRoute && relative(SRC, target).replaceAll("\\", "/").startsWith("server/access/");
+    if (!allowed.includes(targetLayer) && !accessCheck) {
       violations.push(`${relative(ROOT, file)}  (${layer})  →  ${m[1]}  (${targetLayer})`);
     }
   }
