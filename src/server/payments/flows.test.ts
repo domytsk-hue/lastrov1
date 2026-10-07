@@ -194,7 +194,7 @@ test("Centralis offline during payment: access released, order approved, purchas
 
   await db.query(`update lastro.centralis_outbox set next_retry_at = now()`);
   const received: { event: string }[] = [];
-  await flushOutbox(db, config, { sendEvents: async (e) => (received.push(...(e as { event: string }[])), { ok: true }) }, 100);
+  await flushOutbox(db, config, { sendEvents: async (e) => (received.push(...e), { ok: true, outcomes: Object.fromEntries(e.map((x) => [x.event_id, { status: "sent" as const }])) }) }, 100);
   assert.ok(received.some((e) => e.event === "purchase"));
   assert.equal((await outbox(db, "purchase"))[0].status, "sent");
 });

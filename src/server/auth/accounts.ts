@@ -3,7 +3,8 @@ import { hashPassword, parseIdentifier, PBKDF2_ITERATIONS, randomSalt, safeEqual
 import type { Db } from "../db/index.ts";
 import type { CentralisConfig } from "../env.ts";
 import { enqueue } from "../centralis/outbox.ts";
-import { createUserSync } from "../centralis/user-sync.ts";
+import { createUserSync, loadCentralisUser } from "../centralis/user-sync.ts";
+import { serializeUserForCentralis } from "../centralis/serialize.ts";
 import { latestValidAttribution, linkVisitorToUser } from "../tracking/attribution.ts";
 
 /**
@@ -103,8 +104,10 @@ export async function signUp(
       );
       await linkVisitorToUser(tx, ctx.visitorId, u.id);
       await createUserSync(config).created(tx, u.id);
+      const synced = await loadCentralisUser(tx, u.id);
       await enqueue(tx, config, "signup", {
-        user: { external_user_id: u.id },
+        // Centralis creates the user from the signup event: same allowlisted shape as user.*.
+        user: synced ? serializeUserForCentralis(synced) : { external_user_id: u.id },
         visitor_id: ctx.visitorId,
         affiliate: attribution ? { centralis_affiliate_id: attribution.centralis_affiliate_id, code: attribution.code } : null,
       });

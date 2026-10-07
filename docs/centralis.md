@@ -32,7 +32,13 @@ Every payload carries `product_id` (`CENTRALIS_PRODUCT_ID`). A user is identifie
 `product_id + external_user_id` (Lastro ids look like `u_<uuid>`). All timestamps are UTC
 ISO-8601. Money is integer minor units + ISO currency (`amount_minor: 9990, currency: "BRL"`).
 
-## Signing (both directions)
+## Authentication
+
+- **Lastro → Centralis** (events): `Authorization: Bearer <integration key>` — the
+  `cx_live_….<secret>` key generated for the Lastro system in Centralis (Integrações → API).
+  Centralis identifies the system by that key.
+- **Centralis → Lastro** (commands): HMAC signature with the shared
+  `CENTRALIS_WEBHOOK_SECRET`:
 
 ```
 X-Centralis-Timestamp: <unix seconds>
@@ -41,8 +47,6 @@ X-Centralis-Signature: v1=<hex HMAC-SHA256(CENTRALIS_WEBHOOK_SECRET,
 ```
 
 Requests more than 300 s from Lastro's clock are rejected; comparison is constant-time.
-Lastro → Centralis also sends `Authorization: Bearer $CENTRALIS_API_KEY` and
-`X-Centralis-Product-Id`.
 
 ## Centralis → Lastro: commands
 
@@ -89,46 +93,41 @@ oldest pending, last successful delivery.
 
 ## Lastro → Centralis: events
 
-`POST {CENTRALIS_API_URL}/v1/events` (signed), body
-`{ "schema_version": "1.0", "product_id": "…", "events": [ … ] }`, up to 50 events.
-Any 2xx = all accepted. Deduplicate on `event_id` — retries resend the same id. 4xx (except
-408/429) marks the batch failed (no blind retries); 5xx/408/429/timeouts retry with backoff
-(30 s × 4ⁿ, capped at 6 h, 12 attempts).
+Lastro keeps its own event shapes in the outbox (below) and translates them at delivery
+(`src/server/centralis/v1.ts`) to Centralis Hub's ingestion contract:
 
-Every event: `schema_version`, `event_id` (uuid), `event`, `timestamp`, `product_id`.
+`POST {CENTRALIS_API_URL}/api/v1/events` · `{ "events": [ … ] }` (batches of 50, max 100)
+
+Centralis answers per event (`accepted` / `duplicate` → sent; `rejected` → failed, kept with
+the validation message; `failed` → retried). 401 (key), 429 (rate limit), 5xx and timeouts
+retry with backoff (30 s × 4ⁿ, capped at 6 h, 12 attempts). `event_id` makes resends safe.
+
+| Lastro (internal) | Centralis `type` | notes |
+|---|---|---|
+| `user.created/updated/plan_changed/status_changed/subscription_changed/deactivated` | `user_updated` | full allowlisted `user`; `data.change` says which |
+| `signup` | `signup` | full `user`, `visitor_id`, `data.affiliate_code` |
+| `login` | `login` | `user.id` |
+| `session.started` / `page_view` | `session_start` / `page_view` | `page.path` only |
+| `affiliate.click` | `affiliate_click` | `visitor_id`, `session_id`, `data.code`, `page`, `utm` |
+| `checkout.started` | `checkout_start` | `data.order_id/plan/amount/currency/affiliate_code` |
+| `purchase` | `purchase` | `data.order_id` = charge id (renewals are their own order), `amount` in reais (`99.9`), `currency`, `status: "paid"`, `affiliate_code`, `subscription_id`, `plan` |
+| `refund` | `refund` | `data.order_id` = the refunded charge id, `amount` |
+| `subscription.created/renewed/cancelled` | `subscription_started/renewed/cancelled` | `data.subscription_id` (+ plan, amount, interval month) |
+| `affiliate.attributed`, `affiliate.promoted/updated/suspended/activated`, `payment.failed` | same name (custom) | no personal data |
+
+User status maps `active → active`, `suspended → blocked`, `deactivated → inactive`.
+The mapping is checked in tests against the same rules as Centralis's validator.
+
+Internal shapes (kept in `lastro.centralis_outbox`), for reference:
 
 | event | when | main fields |
 |---|---|---|
-| `user.created` / `user.updated` / `user.plan_changed` / `user.subscription_changed` / `user.status_changed` / `user.deactivated` | account changes | `user` (allowlist below), `previous_plan_id?`, `reason?` |
-| `signup` | account created | `user.external_user_id`, `visitor_id`, `affiliate` or `null` |
-| `login` | sign-in | `user.external_user_id`, `visitor_id` |
-| `session.started` / `page_view` | browsing (only while enabled) | `visitor_id`, `session_id`, `page` (path only) |
-| `affiliate.click` | a valid `?ref=` landing, once per session per affiliate | `visitor_id`, `session_id`, `affiliate {id, centralis_affiliate_id, code}`, `landing_page`, `referrer`, `utm` |
-| `affiliate.attributed` | that click became the visitor's attribution | `affiliate`, `model: "last_click"`, `attributed_at`, `expires_at` |
-| `checkout.started` | order opened — **not a purchase** | `order {external_order_id, plan_id, plan_name, amount_minor, currency, status: "pending"}`, `affiliate` |
-| `purchase` | the gateway confirmed money (every paid charge, first and renewals) | see below |
-| `refund` | the gateway confirmed a refund | `refund {external_refund_id, amount_minor, currency, refunded_at}`, `original {external_order_id, external_charge_id, gateway_transaction_id, plan_id, amount_minor, currency}`, `affiliate` |
-| `subscription.created` / `subscription.renewed` / `subscription.cancelled`, `payment.failed` | recurring lifecycle | `subscription {external_subscription_id, plan_id, status}`, `order` |
-| `affiliate.promoted` / `affiliate.updated` / `affiliate.suspended` / `affiliate.activated` | confirmation of a command | `action_id`, `user`, `affiliate {centralis_affiliate_id, code, status, …}` |
-
-```json
-{
-  "schema_version": "1.0", "event_id": "…", "event": "purchase", "timestamp": "2026-10-07T13:04:46.792Z",
-  "product_id": "…",
-  "user": { "external_user_id": "u_…" },
-  "visitor_id": "…",
-  "order": {
-    "external_order_id": "…", "external_charge_id": "…", "gateway": "stripe", "gateway_transaction_id": "…",
-    "kind": "initial", "plan_id": "vitalicio", "plan_name": "Vitalício", "billing": "one_time",
-    "amount_minor": 9990, "currency": "BRL", "status": "approved", "paid_at": "…"
-  },
-  "affiliate": { "centralis_affiliate_id": "…", "code": "JOAO" }
-}
-```
-
-Revenue = Σ `purchase.order.amount_minor` − Σ `refund.refund.amount_minor`. Direct sales
-have `"affiliate": null`. Renewals (`kind: "renewal"`) carry the attribution the
-subscription was born with; whether they earn commission is Centralis's rule.
+| `user.*` | account changes | `user` (allowlist below), `previous_plan_id?`, `reason?` |
+| `signup` / `login` | account created / sign-in | `user`, `visitor_id`, `affiliate` or `null` |
+| `affiliate.click` | a valid `?ref=` landing, once per session per affiliate | `visitor_id`, `session_id`, `affiliate {centralis_affiliate_id, code}`, `landing_page`, `referrer`, `utm` |
+| `checkout.started` | order opened — **not a purchase** | `order {external_order_id, plan_id, amount_minor, currency, status: "pending"}` |
+| `purchase` | the gateway confirmed money (every paid charge) | `order {external_order_id, external_charge_id, external_subscription_id, kind, plan_id, amount_minor, currency, paid_at}`, `affiliate` |
+| `refund` | the gateway confirmed a refund | `refund {amount_minor, …}`, `original {external_order_id, external_charge_id, …}` |
 
 ### User allowlist
 

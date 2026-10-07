@@ -97,6 +97,7 @@ async function purchaseBody(db: Db, charge: Charge, order: Order, plan: Plan, pa
     order: {
       external_order_id: order.id,
       external_charge_id: charge.id,
+      external_subscription_id: charge.subscription_id,
       gateway: order.provider,
       gateway_transaction_id: charge.gateway_transaction_id,
       kind: charge.kind,
@@ -206,7 +207,7 @@ async function approveInitial(db: Db, config: CentralisConfig, provider: string,
   if (subscriptionId) {
     await enqueue(db, config, "subscription.created", {
       user: { external_user_id: order.user_id },
-      subscription: { external_subscription_id: subscriptionId, plan_id: plan.id, plan_name: plan.name, status: "active" },
+      subscription: { external_subscription_id: subscriptionId, plan_id: plan.id, plan_name: plan.name, amount_minor: charge.amount_minor, currency: charge.currency, status: "active" },
       order: { external_order_id: order.id },
     });
     await sync.subscriptionChanged(db, order.user_id);

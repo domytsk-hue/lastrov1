@@ -127,34 +127,48 @@ export async function flushOutbox(db: Db, config: CentralisConfig, client: Centr
   if (!rows.length) return result;
 
   // product_id is stamped at delivery too, so events queued before configuration still carry it.
-  const events = rows.map((r) => ({ ...(typeof r.payload === "string" ? JSON.parse(r.payload) : r.payload), product_id: config.productId }));
+  const events = rows.map((r) => ({ ...(typeof r.payload === "string" ? JSON.parse(r.payload) : r.payload), product_id: config.productId }) as Envelope);
   const res = await client.sendEvents(events);
-  const ids = rows.map((r) => r.id);
 
-  if (res.ok) {
+  const markSent = async (ids: string[]) => {
+    if (!ids.length) return;
     await db.query(`update lastro.centralis_outbox set status = 'sent', sent_at = now(), last_error = null, locked_at = null where id = any($1::uuid[])`, [ids]);
     await db.query(
       `insert into lastro.integration_state (key, value, updated_at) values ('last_success_at', to_jsonb(now()), now())
        on conflict (key) do update set value = excluded.value, updated_at = now()`,
     );
-    result.sent = rows.length;
-    centralisLog("info", "events delivered", { count: rows.length });
-    return result;
-  }
-
-  for (const r of rows) {
-    const give = !res.error.retryable || r.attempts >= MAX_ATTEMPTS;
+  };
+  const markRetryOrFail = async (r: OutboxRow, error: string, retryable: boolean) => {
+    const give = !retryable || r.attempts >= MAX_ATTEMPTS;
     await db.query(
       `update lastro.centralis_outbox
           set status = $2, last_error = $3, locked_at = null,
               next_retry_at = now() + make_interval(secs => $4)
         where id = $1`,
-      [r.id, give ? "failed" : "pending", `${res.error.code}${res.error.status ? ` ${res.error.status}` : ""}`, give ? 0 : backoffSeconds(r.attempts)],
+      [r.id, give ? "failed" : "pending", error.slice(0, 500), give ? 0 : backoffSeconds(r.attempts)],
     );
     if (give) result.failed++;
     else result.retried++;
-    centralisLog(give ? "error" : "warn", give ? "event delivery failed permanently" : "event delivery will retry", { event_id: r.event_id, code: res.error.code });
+    centralisLog(give ? "error" : "warn", give ? "event delivery failed permanently" : "event delivery will retry", { event_id: r.event_id, code: error.slice(0, 80) });
+  };
+
+  if (!res.ok) {
+    for (const r of rows) await markRetryOrFail(r, `${res.error.code}${res.error.status ? ` ${res.error.status}` : ""}`, res.error.retryable);
+    return result;
   }
+
+  // Per-event outcomes: accepted/duplicate → sent; rejected → failed (it won't get better);
+  // failed or missing → retry later.
+  const sent: string[] = [];
+  for (const r of rows) {
+    const o = res.outcomes[r.event_id];
+    if (o?.status === "sent") sent.push(r.id);
+    else if (o?.status === "rejected") await markRetryOrFail(r, `rejected: ${o.error}`, false);
+    else await markRetryOrFail(r, o ? `failed: ${o.error}` : "no result for event", true);
+  }
+  await markSent(sent);
+  result.sent = sent.length;
+  if (sent.length) centralisLog("info", "events delivered", { count: sent.length });
   return result;
 }
 

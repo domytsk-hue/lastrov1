@@ -11,6 +11,7 @@ import { continueInitialSync } from "./user-sync.ts";
 import { myAffiliate } from "../affiliates/me.ts";
 
 const SECRET = "s3cr3t-for-tests";
+const acceptAll = (events: { event_id: string }[]) => ({ ok: true as const, outcomes: Object.fromEntries(events.map((e) => [e.event_id, { status: "sent" as const }])) });
 
 /* -------------------------------- allowlist & privacy -------------------------------- */
 
@@ -60,31 +61,48 @@ test("HMAC: valid, tampered, stale and missing signatures", () => {
 
 /* --------------------------------------- client --------------------------------------- */
 
-test("client signs requests with product id, bearer key and HMAC; normalizes errors", async () => {
+test("client posts the Centralis v1 format with the integration key and reads per-event results", async () => {
   const config = testConfig();
   let seen: { url: string; init: RequestInit } | null = null;
-  const ok: typeof fetch = async (url, init) => {
+  const reply: typeof fetch = async (url, init) => {
     seen = { url: String(url), init: init! };
-    return new Response("{}", { status: 202 });
+    const ids = (JSON.parse(String(init!.body)).events as { event_id: string }[]).map((e) => e.event_id);
+    return Response.json({
+      accepted: 1, duplicates: 1, rejected: 1, failed: 1,
+      results: [
+        { index: 0, event_id: ids[0], status: "accepted" },
+        { index: 1, event_id: ids[1], status: "duplicate" },
+        { index: 2, event_id: ids[2], status: "rejected", errors: [{ path: "data.amount", message: "Required" }] },
+        { index: 3, event_id: ids[3], status: "failed", error: "internal" },
+      ],
+    });
   };
-  const res = await createCentralisClient(config, ok).sendEvents([{ event_id: "e1" }]);
-  assert.deepEqual(res, { ok: true });
-  const s = seen as unknown as { url: string; init: RequestInit };
-  assert.equal(s.url, "https://centralis.test/v1/events");
-  const headers = s.init.headers as Record<string, string>;
-  assert.equal(headers.authorization, "Bearer test-api-key-not-real");
-  assert.equal(headers["x-centralis-product-id"], PRODUCT_ID);
-  const body = s.init.body as string;
-  assert.equal(JSON.parse(body).product_id, PRODUCT_ID);
-  assert.ok(verifyRequest(config.webhookSecret, { timestamp: headers["x-centralis-timestamp"], signature: headers["x-centralis-signature"] }, "POST", "/v1/events", body).ok);
+  const env = (id: string) => ({ schema_version: "1.0", event_id: id, event: "login" as const, timestamp: "2026-10-07T12:00:00.000Z", product_id: PRODUCT_ID, user: { external_user_id: "u_1" } });
+  const ids = [randomUUID(), randomUUID(), randomUUID(), randomUUID()];
+  const res = await createCentralisClient(config, reply).sendEvents(ids.map(env));
+  assert.ok(res.ok);
+  assert.deepEqual(res.outcomes[ids[0]], { status: "sent" });
+  assert.deepEqual(res.outcomes[ids[1]], { status: "sent" });
+  assert.deepEqual(res.outcomes[ids[2]], { status: "rejected", error: "data.amount: Required" });
+  assert.deepEqual(res.outcomes[ids[3]], { status: "retry", error: "internal" });
 
-  const status = (n: number): typeof fetch => async () => new Response("", { status: n });
-  assert.deepEqual((await createCentralisClient(config, status(400)).sendEvents([])) as unknown, { ok: false, error: { code: "rejected", retryable: false, status: 400, message: "HTTP 400" } });
-  assert.equal(((await createCentralisClient(config, status(503)).sendEvents([])) as { error: { retryable: boolean } }).error.retryable, true);
+  const s = seen as unknown as { url: string; init: RequestInit };
+  assert.equal(s.url, "https://centralis.test/api/v1/events");
+  assert.equal((s.init.headers as Record<string, string>).authorization, "Bearer test-api-key-not-real");
+  const sentEvent = JSON.parse(String(s.init.body)).events[0];
+  assert.deepEqual(sentEvent, { event_id: ids[0], type: "login", occurred_at: "2026-10-07T12:00:00.000Z", user: { id: "u_1" } });
+
+  const status = (n: number): typeof fetch => async () => new Response("{}", { status: n });
+  const err = async (n: number) => ((await createCentralisClient(config, status(n)).sendEvents([env(randomUUID())])) as { ok: false; error: { code: string; retryable: boolean } }).error;
+  assert.deepEqual([(await err(401)).code, (await err(401)).retryable], ["unauthorized", true]);
+  assert.deepEqual([(await err(429)).code, (await err(429)).retryable], ["rate_limited", true]);
+  assert.equal((await err(503)).retryable, true);
+  assert.deepEqual([(await err(400)).code, (await err(400)).retryable], ["rejected", false]);
   const down: typeof fetch = async () => {
     throw new TypeError("fetch failed");
   };
   assert.equal(((await createCentralisClient(config, down).sendEvents([])) as { error: { code: string } }).error.code, "network");
+  assert.equal(((await createCentralisClient(testConfig({ apiKey: "" }), down).sendEvents([])) as { error: { code: string } }).error.code, "not_configured");
 });
 
 /* ---------------------------------- outbox & retry ---------------------------------- */
@@ -111,7 +129,7 @@ test("outbox: offline Centralis keeps events pending with backoff, then delivers
 
   await db.query(`update lastro.centralis_outbox set next_retry_at = now()`);
   const sent: object[] = [];
-  const online: CentralisClient = { sendEvents: async (events) => (sent.push(...events), { ok: true }) };
+  const online: CentralisClient = { sendEvents: async (events) => (sent.push(...events), acceptAll(events)) };
   const r2 = await flushOutbox(db, config, online);
   assert.equal(r2.sent, r2.claimed);
   assert.ok(sent.length >= 2); // user.created + signup
@@ -136,6 +154,25 @@ test("outbox: a rejected payload fails immediately; retryable errors fail after 
     await flushOutbox(db, config, flaky);
   }
   assert.deepEqual((await outbox(db)).map((e) => e.status), ["failed", "failed"]);
+});
+
+test("outbox: per-event results — accepted are sent, rejected fail, failed retry", async () => {
+  const db = await freshDb();
+  const config = testConfig();
+  const a = await enqueue(db, config, "user.updated", { user: { external_user_id: "u_a" } });
+  const b = await enqueue(db, config, "user.updated", { user: { external_user_id: "u_b" } });
+  const c = await enqueue(db, config, "user.updated", { user: { external_user_id: "u_c" } });
+  const mixed: CentralisClient = {
+    sendEvents: async () => ({ ok: true, outcomes: { [a!]: { status: "sent" }, [b!]: { status: "rejected", error: "user.email: invalid" }, [c!]: { status: "retry", error: "internal" } } }),
+  };
+  const r = await flushOutbox(db, config, mixed);
+  assert.deepEqual([r.sent, r.failed, r.retried], [1, 1, 1]);
+  const rows = await db.query<{ event_id: string; status: string; last_error: string | null }>(`select event_id, status, last_error from lastro.centralis_outbox`);
+  const by = Object.fromEntries(rows.map((x) => [x.event_id, x]));
+  assert.equal(by[a!].status, "sent");
+  assert.equal(by[b!].status, "failed");
+  assert.match(by[b!].last_error ?? "", /user.email: invalid/);
+  assert.equal(by[c!].status, "pending");
 });
 
 test("feature flag off: nothing is delivered, analytics aren't recorded, critical events are kept", async () => {
