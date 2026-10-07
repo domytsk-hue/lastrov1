@@ -4,9 +4,13 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import { hashPassword, parseIdentifier, PBKDF2_ITERATIONS, randomSalt, safeEqual, validateName, validatePassword, type Identifier, type Result } from "@/auth/rules";
 
 /**
- * Accounts live on this device for now: a registry of users with salted PBKDF2 hashes,
- * and a session pointing at one of them. `AuthService` is the seam where a real API goes —
- * the screens only talk to this interface.
+ * Accounts live on the server (Supabase Postgres, via /api/auth/*) with an httpOnly session
+ * cookie. The screens only talk to `AuthService`.
+ *
+ * Accounts created before that lived only on this device (a registry with salted PBKDF2
+ * hashes). They move to the server the next time their owner signs in: the password is
+ * checked against the local hash, the account is created on the server, and the device's
+ * financial data is carried over to the new id.
  */
 
 export interface Session {
@@ -105,6 +109,57 @@ export const localAuthService: AuthService = {
   },
 };
 
+/* ------------------------------ server-backed accounts ------------------------------ */
+
+const NETWORK_ERROR = "Não foi possível conectar. Verifique sua internet e tente de novo.";
+
+async function postAuth(path: string, body: unknown): Promise<Result<Session>> {
+  try {
+    const res = await fetch(path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body), credentials: "same-origin" });
+    const data = (await res.json()) as { ok: boolean; session?: Session; error?: string };
+    return data.ok && data.session ? { ok: true, value: data.session } : { ok: false, error: data.error ?? INVALID_CREDENTIALS };
+  } catch {
+    return { ok: false, error: NETWORK_ERROR };
+  }
+}
+
+/** Moves this device's financial data from the old local id to the server account id. */
+function carryOverLocalData(fromUserId: string, toUserId: string) {
+  try {
+    const from = `lastro:state:${fromUserId}`;
+    const data = window.localStorage.getItem(from);
+    if (data && !window.localStorage.getItem(`lastro:state:${toUserId}`)) window.localStorage.setItem(`lastro:state:${toUserId}`, data);
+    window.localStorage.removeItem(from);
+    writeUsers(readUsers().filter((u) => u.id !== fromUserId));
+  } catch {
+    /* data stays under the old key; nothing is lost */
+  }
+}
+
+export const apiAuthService: AuthService = {
+  signUp: ({ name, identifier, password }) => postAuth("/api/auth/signup", { name, identifier, password }),
+
+  async signIn(identifier, password) {
+    const remote = await postAuth("/api/auth/login", { identifier, password });
+    if (remote.ok || remote.error === NETWORK_ERROR) return remote;
+
+    // Not on the server yet? If this device holds the account and the password matches,
+    // migrate it now — the person just sees a normal sign-in.
+    const id = parseIdentifier(identifier);
+    if (!id.ok) return remote;
+    const legacy = readUsers().find((u) => u.identifier.value === id.value.value);
+    if (!legacy) return remote;
+    const local = await localAuthService.signIn(identifier, password);
+    if (!local.ok) return remote;
+    const migrated = await postAuth("/api/auth/signup", { name: legacy.name, identifier, password });
+    if (!migrated.ok) return remote;
+    carryOverLocalData(legacy.id, migrated.value.userId);
+    return migrated;
+  },
+
+  enterDemo: () => localAuthService.enterDemo(),
+};
+
 interface AuthContextValue {
   /** undefined while reading storage, null when signed out. */
   session: Session | null | undefined;
@@ -116,16 +171,40 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-export function AuthProvider({ children, service = localAuthService }: { children: React.ReactNode; service?: AuthService }) {
+export function AuthProvider({ children, service = apiAuthService }: { children: React.ReactNode; service?: AuthService }) {
   const [session, setSession] = useState<Session | null | undefined>(undefined);
 
   useEffect(() => {
+    // The cached session renders instantly (and keeps the app usable offline); the server
+    // cookie is the authority and corrects it when reachable.
+    let cached: Session | null = null;
     try {
       const raw = window.localStorage.getItem(SESSION_KEY);
-      setSession(raw ? (JSON.parse(raw) as Session) : null);
+      cached = raw ? (JSON.parse(raw) as Session) : null;
     } catch {
-      setSession(null);
+      cached = null;
     }
+    setSession(cached);
+    if (cached?.demo) return;
+    let alive = true;
+    fetch("/api/auth/session", { credentials: "same-origin", cache: "no-store" })
+      .then((r) => (r.ok ? (r.json() as Promise<{ session: Session | null }>) : Promise.reject()))
+      .then(({ session: server }) => {
+        if (!alive) return;
+        try {
+          if (server) window.localStorage.setItem(SESSION_KEY, JSON.stringify(server));
+          else window.localStorage.removeItem(SESSION_KEY);
+        } catch {
+          /* memory only */
+        }
+        setSession(server);
+      })
+      .catch(() => {
+        /* offline or server unavailable: keep the cached session */
+      });
+    return () => {
+      alive = false;
+    };
   }, []);
 
   const persist = useCallback((s: Session | null) => {
@@ -157,7 +236,10 @@ export function AuthProvider({ children, service = localAuthService }: { childre
   );
 
   const enterDemo = useCallback(() => persist(service.enterDemo()), [service, persist]);
-  const signOut = useCallback(() => persist(null), [persist]);
+  const signOut = useCallback(() => {
+    if (session && !session.demo) void fetch("/api/auth/logout", { method: "POST", credentials: "same-origin" }).catch(() => {});
+    persist(null);
+  }, [persist, session]);
 
   const value = useMemo(() => ({ session, signUp, signIn, enterDemo, signOut }), [session, signUp, signIn, enterDemo, signOut]);
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

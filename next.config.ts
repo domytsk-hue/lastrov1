@@ -22,6 +22,8 @@ const legacyProductRoutes: [string, string][] = [
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  // Database drivers run only on the server, loaded as-is (PGlite ships its own WASM files).
+  serverExternalPackages: ["@electric-sql/pglite", "postgres"],
   async redirects() {
     return [
       ...legacyProductRoutes.map(([source, destination]) => ({ source, destination, permanent: true })),

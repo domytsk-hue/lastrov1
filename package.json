@@ -8,16 +8,20 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "test": "node --test --experimental-strip-types src/product/domain/*.test.ts src/auth/*.test.ts",
-    "check:boundaries": "node scripts/check-boundaries.mjs"
+    "test": "node --test --experimental-strip-types --conditions=react-server src/product/domain/*.test.ts src/auth/*.test.ts src/server/**/*.test.ts",
+    "check:boundaries": "node scripts/check-boundaries.mjs",
+    "db:migrate": "node scripts/db-migrate.mjs"
   },
   "dependencies": {
+    "@electric-sql/pglite": "^0.5.8",
     "clsx": "^2.1.1",
     "framer-motion": "^12.43.0",
     "lucide-react": "^1.52.0",
     "next": "^15.5.27",
+    "postgres": "^3.4.9",
     "react": "^19.3.0",
-    "react-dom": "^19.3.0"
+    "react-dom": "^19.3.0",
+    "server-only": "^0.0.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.3.3",

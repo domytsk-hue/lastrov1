@@ -18,6 +18,7 @@ import { LastroMark } from "@/components/shared/brand/LastroMark";
 import { Avatar } from "@/components/shared/ui/Avatar";
 import { BottomSheet } from "@/components/shared/ui/BottomSheet";
 import { CategoryIcon } from "@/components/product/ui/CategoryIcon";
+import { AffiliateSection } from "@/components/product/profile/AffiliateSection";
 import { Button, Field, PageHeader, inputClass } from "@/components/shared/ui/primitives";
 import { useToast } from "@/components/shared/ui/Toast";
 import { ROUTES } from "@/config/routes";
@@ -57,6 +58,8 @@ export function ProfileScreen() {
           </p>
         </div>
       </section>
+
+      <AffiliateSection enabled={!isDemo && !!session && !session.demo} />
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Group title="Conta">

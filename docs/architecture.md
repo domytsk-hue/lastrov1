@@ -65,20 +65,23 @@ product ───┘                        ├─▶ shared ─▶ design-syste
 
 - `shared` never imports `product`, `marketing` or `auth`. Shared components take plain data through props. "Hide values" reaches them through a tiny `PrivacyProvider` context: the product supplies it, and elsewhere it defaults to visible.
 - `marketing` and `product` never import each other.
+- `server` (`src/server/**`: database, accounts, Centralis, payments, tracking) is imported only by route handlers in `src/app/api/**`. No UI layer may import it, so secrets and database drivers can't reach a browser bundle; UI talks to it over `/api/*`.
 - These rules are enforced by `npm run check:boundaries` (`scripts/check-boundaries.mjs`).
 
 ## Providers per experience
 
 | Experience | Providers |
 |---|---|
-| All (root) | `AuthProvider` (reads the local session) and `ToastProvider` |
+| All (root) | `AuthProvider` (server session, cached locally), `ToastProvider`, `Tracker` (page views, `?ref=` landings) |
 | Marketing | none extra; no financial state is ever initialized |
 | Auth | none extra; it redirects to `/app` when a session exists |
 | Product | `FinanceProvider` (per user), `UIProvider` (composer, privacy, money flow) |
 
 ## Route protection
 
-Sessions currently live on the device (`localStorage`), so `/app/*` is protected client-side by `ProductShell`: no session means it redirects to `/login`. When sessions move to an HTTP-only cookie, add `middleware.ts` matching `/app/:path*`. That is the only place that needs to change.
+Accounts live on the server (Supabase Postgres) with an HTTP-only session cookie; the client keeps a cached copy of the session so the app opens instantly and keeps working offline, and `/api/auth/session` corrects it when reachable. `/app/*` stays protected client-side by `ProductShell` (no session → `/login`) because financial data still lives on the device and the demo account has no server session; every server endpoint authenticates the cookie itself. Device-only accounts from before migrate to the server at their next sign-in.
+
+The server side and the Centralis Hub integration are described in [`centralis.md`](centralis.md).
 
 ## Product demos on the marketing site
 

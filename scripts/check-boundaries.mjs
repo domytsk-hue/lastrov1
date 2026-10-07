@@ -6,6 +6,8 @@
  *   product   → shared, design-system, lib, config, auth
  *   auth      → shared, design-system, lib, config
  *   shared    → design-system, lib            (never product / marketing / auth)
+ *   server    → server, lib, config, auth (pure rules) — never imported by UI layers,
+ *               so secrets and the database can't leak into a browser bundle
  *   lib, design-system → nothing above them
  *
  * Run: npm run check:boundaries
@@ -26,6 +28,7 @@ function layerOf(file) {
   if (p.startsWith("design-system/")) return "design-system";
   if (p.startsWith("lib/")) return "lib";
   if (p.startsWith("config/")) return "config";
+  if (p.startsWith("server/")) return "server";
   if (p.startsWith("app/")) return "app"; // root layout, providers: composition root, may import anything
   return "other";
 }
@@ -38,6 +41,7 @@ const ALLOWED = {
   "design-system": ["design-system"],
   lib: ["lib"],
   config: ["config"],
+  server: ["server", "lib", "config", "auth"],
   app: null,
   other: null,
 };
@@ -77,4 +81,4 @@ if (violations.length) {
   console.error(`✗ ${violations.length} layer boundary violation(s):\n  ` + violations.join("\n  "));
   process.exit(1);
 }
-console.log("✓ Layer boundaries respected (marketing · product · auth · shared · design-system · lib).");
+console.log("✓ Layer boundaries respected (marketing · product · auth · shared · server · design-system · lib).");
