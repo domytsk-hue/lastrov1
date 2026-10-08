@@ -29,7 +29,7 @@ const ARIA: Partial<Record<KeypadKey, string>> = {
 /** Floating white number keys; navy operators; the result key in electric blue. */
 export function Keypad({ onKey, className }: { onKey: (k: KeypadKey) => void; className?: string }) {
   return (
-    <div className={cn("grid grid-cols-5 gap-2", className)} role="group" aria-label="Calculadora">
+    <div className={cn("grid grid-cols-5 gap-2 [@media(max-height:780px)]:gap-1.5 [@media(max-height:700px)]:gap-1!", className)} role="group" aria-label="Calculadora">
       {ROWS.flat().map((k) => {
         const isDigit = /^[\d,]+$/.test(k);
         const isOp = ["+", "-", "×", "÷", "%"].includes(k);
@@ -45,7 +45,7 @@ export function Keypad({ onKey, className }: { onKey: (k: KeypadKey) => void; cl
             }}
             aria-label={ARIA[k] ?? k}
             className={cn(
-              "grid h-[54px] place-items-center rounded-[22px] select-none",
+              "grid h-[54px] place-items-center rounded-[22px] select-none [@media(max-height:780px)]:h-[46px] [@media(max-height:700px)]:h-[40px]!",
               isDigit && "bg-white font-display text-[24px] font-medium text-ink-900 shadow-[0_8px_18px_-12px_rgba(22,80,180,0.55),inset_0_1px_0_#fff]",
               isOp && "bg-midnight text-[22px] font-medium text-white shadow-[0_8px_18px_-12px_rgba(7,26,59,0.8)]",
               (k === "back" || k === "clear") && "bg-white/55 text-[16px] font-semibold text-ink-700",
