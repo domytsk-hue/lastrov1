@@ -12,6 +12,12 @@ import { checkoutProviders, providerForMethod } from "@/server/payments/registry
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+/** https origin of this request (the host the buyer is on); NEXT_PUBLIC_SITE_URL otherwise. */
+function publicOrigin(req: Request): string {
+  const u = new URL(req.url);
+  return u.protocol === "https:" && !/^(localhost|127\.|\[::1\])/.test(u.hostname) ? u.origin : siteUrl();
+}
+
 const json = (body: unknown, status = 200) => NextResponse.json(body, { status, headers: NO_STORE });
 
 /** GET /api/checkout — what the checkout page needs: the account, its access, the gateways. */
@@ -92,7 +98,9 @@ export async function POST(req: Request) {
       method,
       customer: billing ? { userId: user.id, ...billing.value } : null,
       card,
-      returnUrl: `${siteUrl()}/checkout?pedido=${order.id}`,
+      // The address this site is really served on (e.g. with www): gateways send their
+      // notifications there and many don't follow a redirect from another host.
+      returnUrl: `${publicOrigin(req)}/checkout?pedido=${order.id}`,
     });
     await attachCheckout(db, order.id, result);
     return json({ ok: true, order_id: order.id, status: "pending", instructions: result.instructions, expires_at: result.expiresAt ?? null });

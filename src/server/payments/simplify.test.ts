@@ -162,3 +162,22 @@ test("simplify: tolerant of the notification's shape — nested, form-encoded, n
   assert.deepEqual([form?.[0].type, form?.[0].orderId], ["payment.approved", a.orderId]);
   assert.equal(await p.parseWebhook(JSON.stringify({ event: "deposit.paid", internal_id: a.txId, external_id: randomUUID(), status: "approved", amount: "99.90" }), new Headers(), url(a.orderId)), null);
 });
+
+test("manual confirmation: only this order's own charge id and exact amount; never for a gateway Lastro can query", async () => {
+  const { confirmManually } = await import("./checkout.ts");
+  const db = await freshDb();
+  const c = testConfig();
+  const u = await newUser(db, c);
+  const p = provider(fakeApi().impl);
+  const { orderId, txId } = await checkout(db, c, p, u, "mensal");
+  assert.deepEqual(await confirmManually(db, c, { orderId, transactionId: "TXN_OTHER", amountMinor: 1990 }, () => p), { ok: false, error: "transaction_mismatch" });
+  assert.deepEqual(await confirmManually(db, c, { orderId, transactionId: txId, amountMinor: 100 }, () => p), { ok: false, error: "amount_mismatch" });
+  assert.deepEqual(await confirmManually(db, c, { orderId, transactionId: txId, amountMinor: 1990 }, () => ({ ...p, getPayment: async () => null })), { ok: false, error: "gateway_can_be_queried" });
+  assert.equal((await access(db, u)).state, "none");
+  assert.deepEqual(await confirmManually(db, c, { orderId, transactionId: txId, amountMinor: 1990 }, () => p), { ok: true, result: "applied" });
+  assert.equal((await access(db, u)).state, "monthly");
+  assert.equal((await outbox(db, "purchase")).length, 1);
+  assert.deepEqual(await confirmManually(db, c, { orderId, transactionId: txId, amountMinor: 1990 }, () => p), { ok: false, error: "not_open" });
+  // A late real notification for the same charge is a duplicate, not a second purchase.
+  assert.equal(await handlePaymentEvent(db, c, "simplify", (await notify(p, orderId, paid(orderId, txId, "19.90")))![0]), "duplicate");
+});

@@ -275,3 +275,37 @@ export async function requestRenewalCancellation(db: Db, userId: string, provide
   await db.query(`update lastro.subscriptions set cancel_at_period_end = true, updated_at = now() where id = $1`, [sub.id]);
   return { ok: true };
 }
+
+/**
+ * A person confirms, in the gateway's own panel, that a charge Lastro created was paid — for
+ * gateways without a status query whose notification was lost (Simplify). Only for a charge
+ * of this very order (its id must be the one stored at checkout) and for exactly the order's
+ * amount; then it goes through the same path as a gateway confirmation (access, Centralis).
+ * Gateways Lastro can ask (getPayment) are never confirmed by hand.
+ */
+export async function confirmManually(
+  db: Db,
+  config: CentralisConfig,
+  input: { orderId: string; transactionId: string; amountMinor: number },
+  providers: ProviderRef,
+  now = new Date(),
+): Promise<{ ok: true; result: HandleResult } | { ok: false; error: "not_found" | "not_open" | "gateway_can_be_queried" | "transaction_mismatch" | "amount_mismatch" }> {
+  if (!/^[0-9a-f-]{36}$/i.test(input.orderId)) return { ok: false, error: "not_found" };
+  const [o] = await db.query<OrderRow>(`select * from lastro.orders where id = $1`, [input.orderId]);
+  if (!o) return { ok: false, error: "not_found" };
+  if (!["pending", "cancelled", "expired"].includes(o.status)) return { ok: false, error: "not_open" };
+  if (resolve(providers, o.provider)?.getPayment) return { ok: false, error: "gateway_can_be_queried" };
+  if (!o.provider_payment_id || o.provider_payment_id !== input.transactionId) return { ok: false, error: "transaction_mismatch" };
+  if (input.amountMinor !== o.amount_minor) return { ok: false, error: "amount_mismatch" };
+  const result = await handlePaymentEvent(db, config, o.provider, {
+    providerEventId: `manual:${input.transactionId}`,
+    type: "payment.approved",
+    orderId: o.id,
+    transactionId: input.transactionId,
+    amountMinor: o.amount_minor,
+    currency: o.currency,
+    method: (o.payment_method as PaymentMethod | null) ?? undefined,
+    occurredAt: now,
+  });
+  return { ok: true, result };
+}

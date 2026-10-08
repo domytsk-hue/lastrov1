@@ -308,7 +308,14 @@ Simplify ──POST { event: deposit.paid, internal_id, external_id, status, amo
 - **Refunds.** No refund event is documented for deposits: a Pix refund done in Simplify must
   be mirrored by a person (revoke the access).
 - **Without a status query**, a lost notification (Simplify retries 3×, 60 s apart) leaves the
-  order pending: a person can confirm it in Simplify's panel and grant the access.
+  order pending. A person who sees the deposit paid in Simplify's panel confirms it with
+  `POST /api/admin/payments/confirm` (`Authorization: Bearer $CRON_SECRET`,
+  `{ order_id, transaction_id, amount }`): the charge id must be the one stored on the order
+  and the amount exactly the order's; the purchase then follows the normal path (access,
+  Centralis). Not available for gateways Lastro can query (Mercado Pago).
+- **Webhook address.** Each deposit's webhook URL uses the host the buyer is on (e.g.
+  `www.lastrofinance.com.br`), not `NEXT_PUBLIC_SITE_URL`: Simplify doesn't follow a redirect
+  from the bare domain to `www`.
 
 ### Setting it up (once)
 
