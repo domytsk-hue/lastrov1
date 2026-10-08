@@ -12,7 +12,7 @@ export async function GET() {
   if (!user) return NextResponse.json({ ok: false, error: "unauthenticated" }, { status: 401, headers: NO_STORE });
   const provider = activePaymentProvider();
   return NextResponse.json(
-    { ok: true, access: await getAccess(db, user.id), payments: { available: !!provider, recurring: provider?.supportsSubscriptions ?? false } },
+    { ok: true, access: await getAccess(db, user.id), payments: { available: !!provider, recurring: provider?.supportsSubscriptions ?? false, autoRenews: provider?.autoRenews ?? false, provider: provider?.id ?? null } },
     { headers: NO_STORE },
   );
 }

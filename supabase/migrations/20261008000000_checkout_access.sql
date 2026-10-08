@@ -6,8 +6,9 @@
 --   access_entitlements  what a user may use, and until when — one row per paid charge
 --                          (or per administrative grant). Access is computed from these rows
 --                          at request time; nothing on the client can create one.
---   payment_reviews      payments that need a person or a retry: amount/currency mismatch,
---                          duplicate purchases, renewals still to be cancelled after an upgrade
+--   payment_reviews      payments that need a person or a retry: amount/currency/plan mismatch,
+--                          duplicate purchases, renewals still to be cancelled after an upgrade,
+--                          gateway events Lastro doesn't recognize
 --   users                + checkout_deferred_at ("Pagar depois": navigation only, never access)
 --   subscriptions        + cancel_at_period_end, current_period_start
 --
@@ -73,7 +74,7 @@ create index if not exists access_entitlements_user_idx on lastro.access_entitle
 
 create table if not exists lastro.payment_reviews (
   id                      uuid primary key,
-  kind                    text not null check (kind in ('amount_mismatch', 'duplicate_purchase', 'unknown_order', 'cancel_renewal')),
+  kind                    text not null check (kind in ('amount_mismatch', 'duplicate_purchase', 'unknown_order', 'cancel_renewal', 'unhandled_event')),
   status                  text not null default 'open' check (status in ('open', 'resolved')),
   user_id                 text references lastro.users (id),
   order_id                uuid references lastro.orders (id),
@@ -88,6 +89,11 @@ create table if not exists lastro.payment_reviews (
   created_at              timestamptz not null default now(),
   resolved_at             timestamptz
 );
+-- Same check again by name, so re-running this file on a database that has an older copy of
+-- the table also accepts the newest review kinds.
+alter table lastro.payment_reviews drop constraint if exists payment_reviews_kind_check;
+alter table lastro.payment_reviews add constraint payment_reviews_kind_check
+  check (kind in ('amount_mismatch', 'duplicate_purchase', 'unknown_order', 'cancel_renewal', 'unhandled_event'));
 create index if not exists payment_reviews_open_idx on lastro.payment_reviews (status, kind, next_attempt_at);
 
 -- ---------------------------------------------------------------------------------------

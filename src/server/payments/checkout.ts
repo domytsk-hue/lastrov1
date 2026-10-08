@@ -82,13 +82,14 @@ const IDEMPOTENCY_RE = /^[A-Za-z0-9_-]{8,80}$/;
 export async function createOrder(
   db: Db,
   config: CentralisConfig,
-  input: { userId: string; planId: string; method: string; idempotencyKey: string; visitorId: string | null; provider: Pick<PaymentProvider, "id" | "methods"> },
+  input: { userId: string; planId: string; method: string; idempotencyKey: string; visitorId: string | null; provider: Pick<PaymentProvider, "id" | "methods" | "hostedCheckout"> },
   now = new Date(),
 ): Promise<{ ok: true; order: OrderRow; plan: Plan; reused: boolean } | { ok: false; error: CheckoutError }> {
   const plan = await getPlan(db, input.planId);
   if (!plan) return { ok: false, error: "plan_not_found" };
-  if (!input.provider.methods.includes(input.method as PaymentMethod)) return { ok: false, error: "invalid_method" };
-  const method = input.method as PaymentMethod;
+  // A hosted checkout (Kirvano) lets the buyer choose Pix or card on its own page.
+  const method: PaymentMethod | null = input.provider.hostedCheckout ? null : (input.method as PaymentMethod);
+  if (method !== null && !input.provider.methods.includes(method)) return { ok: false, error: "invalid_method" };
   const key = IDEMPOTENCY_RE.test(input.idempotencyKey) ? input.idempotencyKey : null;
 
   return db.tx(async (tx) => {

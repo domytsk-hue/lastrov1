@@ -56,9 +56,9 @@ export function createSandboxProvider(secret: string, state: SandboxState = { pa
       return {
         providerCheckoutId: `sbx_${randomUUID()}`,
         providerPaymentId: paymentId,
-        expiresAt: req.method === "pix" ? expiresAt : undefined,
+        expiresAt: req.method !== "card" ? expiresAt : undefined,
         instructions:
-          req.method === "pix"
+          req.method !== "card"
             ? { kind: "pix", copyPaste: `SANDBOX-NAO-PAGAVEL-${req.orderId}`, qrCodeImage: null, expiresAt: expiresAt.toISOString() }
             : { kind: "awaiting" },
       };

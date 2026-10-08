@@ -1,7 +1,7 @@
 # Checkout, plans and access
 
-How a Lastro account goes from sign-up to paid access, and where a real payment gateway will
-plug in. The rule behind all of it: **only a verified confirmation from the gateway turns
+How a Lastro account goes from sign-up to paid access, and how Kirvano, the payment
+gateway, plugs in. The rule behind all of it: **only a verified confirmation from the gateway turns
 money into access.** No page, browser call, URL or button can.
 
 ## Plans — one catalog
@@ -194,8 +194,7 @@ Nothing new is invented; the existing outbox, events and attribution are reused.
 1. Apply `supabase/migrations/20261008000000_checkout_access.sql` on Supabase. It is
    additive and safe to run twice.
 2. Deploy this code with `LASTRO_PAYWALL` **unset**. Nothing changes for users.
-3. Integrate and validate a real gateway (checklist below). Then set `PAYMENT_PROVIDER` and the
-   gateway's keys.
+3. Configure Kirvano and validate it with a real sale ("Setting it up" below).
 4. Decide how to treat **existing accounts** (see pending decisions) and create their grants
    if any.
 5. Set `LASTRO_PAYWALL=on` and redeploy.
@@ -211,13 +210,113 @@ insert into lastro.access_entitlements (id, user_id, source, starts_at, ends_at,
 values (gen_random_uuid(), '<user id>', 'admin', now(), null, '<why>');
 ```
 
-## Without a gateway (today)
+## Kirvano (the production gateway)
 
-- `PAYMENT_PROVIDER` empty → `POST /api/checkout` answers `503 payments_unavailable` before
-  storing anything: no order, no billing data, no event.
-- The checkout shows the plans and the Pix/Cartão choice, explains that payments aren't
-  available yet, disables the pay button and keeps "Pagar depois".
-- No QR code is generated and no card is accepted.
+Kirvano is a **hosted checkout**:
+- each plan is an offer in Kirvano with its own payment page;
+- the buyer types name, e-mail, CPF and phone, and pays with Pix or card **on Kirvano's
+  page**;
+- so with Kirvano, Lastro's `/checkout` only asks for the plan. It sends the buyer to the
+  offer page with **one** parameter: `?src=lastro-<order id>`. No personal data goes in the
+  URL.
+
+Adapter: `src/server/payments/kirvano.ts`.
+
+```
+/checkout → order (pending) → https://pay.kirvano.com/<offer>?src=lastro-<order id>
+Kirvano webhook ──(token)──► /api/payments/webhook/kirvano → SALE_APPROVED → checks → access
+```
+
+- **Authenticity.** Kirvano has no public API to create or query charges, so its webhook is
+  the only confirmation.
+  - A webhook is accepted only with the shared token, compared in constant time. The token can
+    come in the `X-Kirvano-Token` header (or `security-token` / `x-webhook-token`), or as
+    `?token=` in the webhook URL.
+  - Configure both in Kirvano, so whichever way Kirvano sends it, it works.
+- **Matching the order.** Kirvano echoes our `src` back as `utm.src`.
+  - If that is lost, the buyer's e-mail on Kirvano's page is matched, in memory only, to the
+    account's open order (or its paid monthly order, for a renewal).
+  - Any other e-mail is no one's purchase. It goes to review as `unknown_order`.
+- **Checks before access.** The sale must be `status: APPROVED`, of the plan's **offer id**,
+  with `total_price` equal to the plan's price. That rules out an order bump, a coupon or
+  another product.
+  - Anything else goes to review, with no access.
+  - Kirvano's `"R$ 99,90"` strings are parsed exactly to centavos.
+  - Its dates (`YYYY-MM-DD HH:mm:ss`, no zone) are read as Brasília time.
+- **Event mapping.** Names are Kirvano's published examples. `status` is read too, so a
+  renamed refund still revokes.
+
+  | Kirvano | Lastro |
+  |---|---|
+  | `SALE_APPROVED`, `SUBSCRIPTION_RENEWED` (status `APPROVED`) | payment confirmed: the first one gives access, each later one on a monthly order adds a month |
+  | `PIX_GENERATED`, `ABANDONED_CART`, `BANK_SLIP_GENERATED` | nothing (not a purchase) |
+  | `PIX_EXPIRED`, `BANK_SLIP_EXPIRED` | order expired |
+  | `SALE_REFUSED` / status `REFUSED` | order failed |
+  | `SALE_REFUNDED` / status `REFUNDED` | refund: that charge's access revoked |
+  | `SALE_CHARGEBACK` / status `CHARGEBACK` | chargeback: same |
+  | `SUBSCRIPTION_CANCELED` / `_EXPIRED` / `_OVERDUE` | nothing: the paid month simply ends |
+  | anything else | `unhandled_event` review (event name only) |
+
+- **Duplicates.** Kirvano sends no event id, so `<event>:<sale_id>` deduplicates retries, and
+  `sale_id` is the transaction (one charge per sale, ever).
+- **Monthly.** With `KIRVANO_MENSAL_RECORRENTE=true`, the Mensal offer is a Kirvano
+  subscription:
+  - each month Kirvano charges, its approved sale adds a month (`kind: renewal`, the original
+    affiliate);
+  - Lastro can't cancel it by API, so the profile says Kirvano renews it;
+  - **after an upgrade to vitalício**, a `cancel_renewal` review (manual) asks a person to
+    cancel the old subscription in Kirvano. Until it is resolved, the profile says the
+    cancellation is in progress.
+  
+  A month Kirvano charges in the meantime is kept and flagged (`duplicate_purchase`); the
+  lifetime is never touched.
+- **Privacy.** The webhook carries the buyer's CPF and phone. They are never stored or
+  forwarded: no payload is saved, and reviews keep only ids, amounts and event names.
+
+### Setting it up (once)
+
+1. **In Kirvano**, create one product "Lastro" with two offers.
+   - **Vitalício:** R$ 99,90, single payment.
+   - **Mensal:** R$ 19,90, either a subscription (then set `KIRVANO_MENSAL_RECORRENTE=true`) or
+     a single payment that gives one month.
+   - No order bumps on these offers: a different total goes to review.
+2. **Copy each offer's** checkout link and offer id.
+3. **Pick the redirect.** As the after-purchase redirect of both offers, use
+   `https://<site>/checkout`. The page finds the open order and waits for the confirmation.
+4. **In Kirvano → Integrações → Webhooks**, create a webhook:
+   - **URL:** `https://<site>/api/payments/webhook/kirvano?token=<KIRVANO_WEBHOOK_TOKEN>`
+   - **Token:** the same value
+   - **Product:** Lastro
+   - **Events:** all purchase, Pix, refund, chargeback and subscription events.
+5. **On Vercel**, set:
+   - `PAYMENT_PROVIDER=kirvano`;
+   - the `KIRVANO_*` variables (see `.env.example`).
+6. **Make one real low-value test purchase.** Then check that:
+   - Kirvano's "Ver logs" shows `200`;
+   - the order is `approved` in `lastro.orders`;
+   - there are no open `unhandled_event` reviews.
+   
+   If a refund is tested, check that the access is revoked.
+7. **Only then** turn on `LASTRO_PAYWALL=on`.
+
+### What could not be confirmed from public documentation
+
+These are worth confirming on the first real sale (in "Ver logs"):
+- Kirvano's help center was not reachable while this was written. The event examples come
+  from Kirvano's published samples (`SALE_APPROVED`, `PIX_GENERATED`, `PIX_EXPIRED`,
+  `ABANDONED_CART`).
+- **The token header name.** Lastro accepts the header and the URL parameter, so either works.
+- **The exact names of refund, chargeback and subscription events.** Lastro also reads
+  `status`, and anything unknown is kept for review rather than ignored.
+- **Whether a renewal arrives as `SALE_APPROVED`, `SUBSCRIPTION_RENEWED` or both, and whether it
+  keeps `utm.src`.** All of these are handled; without `src`, the account's e-mail is used.
+
+## Without a gateway
+
+- `PAYMENT_PROVIDER` empty (or Kirvano not fully configured) → `POST /api/checkout` answers
+  `503 payments_unavailable` before storing anything: no order, no billing data, no event.
+- The checkout shows the plans, explains that payments aren't available yet, disables the pay
+  button and keeps "Pagar depois".
 - **The `sandbox` gateway only exists in isolated environments:**
   - development without `DATABASE_URL`;
   - or a production build on the embedded database.
@@ -225,40 +324,36 @@ values (gen_random_uuid(), '<user id>', 'admin', now(), null, '<why>');
   It is never available next to Supabase in production, and there is no override. Its "Pix
   code" is a label (`SANDBOX-NAO-PAGAVEL-…`), not a payable BR Code.
 
-## Connecting a real gateway — checklist
+## Connecting another gateway — checklist
 
 1. Write `src/server/payments/<gateway>.ts` implementing `PaymentProvider` (`provider.ts`),
    and register it in `registry.ts`.
 2. **`createCheckout`:**
    - use the order id as the gateway's external reference **and** idempotency key;
-   - send the customer data from `CheckoutRequest.customer` (name, e-mail, phone, CPF);
-   - return `pix` (QR image + copy-and-paste code + expiry), `redirect` (hosted card page) or
-     `awaiting`.
+   - return `pix`, `redirect` or `awaiting`;
+   - set `hostedCheckout: true` when the gateway's page collects the billing data.
 3. **`parseWebhook`:**
-   - verify the gateway's signature or authentication;
+   - verify the gateway's authentication;
    - reject other accounts and test-mode events in production;
    - map to `payment.approved` (captured money only), `payment.pending`, `payment.failed`,
-     `payment.expired`, `payment.refunded` (with `refundReason: "chargeback"` for disputes),
-     `subscription.renewed`, `subscription.cancelled`;
-   - always fill `amountMinor` and `currency`, plus `periodStart`/`periodEnd` when the
-     gateway states them.
-4. **`getPayment`:** the authenticated status query, so a returning buyer is confirmed even
-   if a webhook is late.
-5. **`cancelSubscription`:** only if the gateway really supports recurring card or Pix
-   Automático. Set `supportsSubscriptions` accordingly; the checkout's renewal text follows
-   it.
-6. Point the gateway's webhook to `https://<site>/api/payments/webhook/<gateway id>`.
-7. Test in the gateway's test mode, on a preview with a separate database. Never use the
-   production database or production Centralis for this.
-8. Remove nothing from the sandbox: the tests depend on it.
+     `payment.expired`, `payment.refunded` (`refundReason: "chargeback"` for disputes),
+     `subscription.renewed`, `subscription.cancelled`, or `unhandled`;
+   - always fill `amountMinor` and `currency`, plus `planId` when the gateway names the
+     product.
+4. **`getPayment` / `cancelSubscription`:** only if the gateway really has them.
+5. Point the gateway's webhook to `https://<site>/api/payments/webhook/<gateway id>`.
+6. Test in the gateway's test mode, on a preview with a separate database.
 
 ## Environment variables
 
 | Variable | Where | Meaning |
 |---|---|---|
 | `LASTRO_PAYWALL` | server | `on` enforces plan access; unset = today's behavior |
-| `PAYMENT_PROVIDER` | server | gateway id for new checkouts; empty = payments unavailable |
-| gateway keys | server | defined by the adapter (never `NEXT_PUBLIC_`) |
+| `PAYMENT_PROVIDER` | server | `kirvano` in production; empty = payments unavailable |
+| `KIRVANO_WEBHOOK_TOKEN` | server | secret shared with the Kirvano webhook (≥ 16 chars) |
+| `KIRVANO_CHECKOUT_URL_MENSAL` / `_VITALICIO` | server | each offer's payment page (https) |
+| `KIRVANO_OFFER_ID_MENSAL` / `_VITALICIO` | server | offer ids; sales of anything else never release access |
+| `KIRVANO_MENSAL_RECORRENTE` | server | `true` when Mensal is a Kirvano subscription |
 | `PAYMENT_SANDBOX_SECRET` | dev/test only | sandbox webhook HMAC secret |
 | `CRON_SECRET` | server | the scheduled flush also runs plan expiry and renewal cancellations |
 

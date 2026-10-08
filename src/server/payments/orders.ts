@@ -81,7 +81,7 @@ export class RetryLater extends Error {
 
 async function openReview(
   db: Db,
-  r: { kind: "amount_mismatch" | "duplicate_purchase" | "unknown_order" | "cancel_renewal"; userId?: string | null; orderId?: string | null; chargeId?: string | null; subscriptionId?: string | null; provider: string; transactionId?: string | null; detail?: Record<string, unknown>; retry?: boolean },
+  r: { kind: "amount_mismatch" | "duplicate_purchase" | "unknown_order" | "cancel_renewal" | "unhandled_event"; userId?: string | null; orderId?: string | null; chargeId?: string | null; subscriptionId?: string | null; provider: string; transactionId?: string | null; detail?: Record<string, unknown>; retry?: boolean },
 ) {
   await db.query(
     `insert into lastro.payment_reviews (id, kind, user_id, order_id, charge_id, subscription_id, provider, gateway_transaction_id, detail, next_attempt_at)
@@ -147,6 +147,10 @@ export async function handlePaymentEvent(db: Db, config: CentralisConfig, provid
         return expired(tx, provider, ev);
       case "subscription.cancelled":
         return cancelSubscription(tx, config, provider, ev);
+      case "unhandled":
+        // Authentic but unknown to Lastro (e.g. a gateway event renamed): a person looks at it.
+        await openReview(tx, { kind: "unhandled_event", provider, transactionId: ev.transactionId ?? null, detail: { event: ev.gatewayEventName ?? null, order_ref: ev.orderId ?? null } });
+        return "review";
     }
   });
 }
@@ -166,13 +170,52 @@ function amountMatches(ev: PaymentEvent, expected: { amount_minor: number; curre
   return ev.amountMinor === expected.amount_minor && (ev.currency ?? "").toUpperCase() === expected.currency.toUpperCase();
 }
 
+/**
+ * When a hosted checkout lost our order reference, the buyer's e-mail (as typed on the
+ * gateway's page) may still lead to the account's order: its open order first, else its paid
+ * monthly order (a renewal). Used in memory only.
+ */
+async function findOrderByBuyer(db: Db, provider: string, ev: PaymentEvent): Promise<Order | undefined> {
+  if (!ev.customerEmail) return undefined;
+  const [o] = await db.query<Order>(
+    `select o.* from lastro.orders o join lastro.users u on u.id = o.user_id
+      where o.provider = $1 and u.email = $2 and ($3::text is null or o.plan_id = $3)
+        and (o.status = 'pending' or (o.status = 'approved' and o.plan_id = 'mensal'))
+      order by (o.status = 'pending') desc, o.created_at desc
+      limit 1
+      for update of o`,
+    [provider, ev.customerEmail, ev.planId && ev.planId !== "unknown" ? ev.planId : null],
+  );
+  return o;
+}
+
 async function approveInitial(db: Db, config: CentralisConfig, provider: string, ev: PaymentEvent): Promise<HandleResult> {
-  if (!ev.orderId || !ev.transactionId) return "ignored";
-  const [order] = await db.query<Order>(`select * from lastro.orders where id = $1 and provider = $2 for update`, [ev.orderId, provider]);
+  if (!ev.transactionId) return "ignored";
+  let order: Order | undefined;
+  if (ev.orderId) [order] = await db.query<Order>(`select * from lastro.orders where id = $1 and provider = $2 for update`, [ev.orderId, provider]);
+  order ??= await findOrderByBuyer(db, provider, ev);
   if (!order) {
-    await openReview(db, { kind: "unknown_order", provider, transactionId: ev.transactionId, detail: { order_id: ev.orderId, amount_minor: ev.amountMinor ?? null, currency: ev.currency ?? null } });
+    await openReview(db, { kind: "unknown_order", provider, transactionId: ev.transactionId, detail: { order_id: ev.orderId ?? null, plan_id: ev.planId ?? null, amount_minor: ev.amountMinor ?? null, currency: ev.currency ?? null } });
     return "review";
   }
+  if (ev.planId && ev.planId !== order.plan_id) {
+    // The gateway sold a different plan (or product) than this order: no access, a person decides.
+    await openReview(db, { kind: "amount_mismatch", userId: order.user_id, orderId: order.id, provider, transactionId: ev.transactionId, detail: { expected_plan: order.plan_id, received_plan: ev.planId } });
+    return "review";
+  }
+  if (order.status === "approved") {
+    const [same] = await db.query(`select 1 from lastro.charges where provider = $1 and gateway_transaction_id = $2`, [provider, ev.transactionId]);
+    if (same) return "duplicate";
+    // A new paid month of an approved monthly order: the gateway renewed it (e.g. a Kirvano subscription).
+    if (order.plan_id === "mensal") {
+      if (!amountMatches(ev, order)) {
+        await openReview(db, { kind: "amount_mismatch", userId: order.user_id, orderId: order.id, provider, transactionId: ev.transactionId, detail: { expected_minor: order.amount_minor, received_minor: ev.amountMinor ?? null, renewal: true } });
+        return "review";
+      }
+      return renewOrder(db, config, provider, order, ev);
+    }
+  }
+  if (ev.method) await db.query(`update lastro.orders set payment_method = coalesce(payment_method, $2) where id = $1`, [order.id, ev.method]);
   if (!amountMatches(ev, order)) {
     // Money arrived, but not the money this order asked for: a person decides. No access.
     await openReview(db, {
@@ -239,6 +282,19 @@ async function approveInitial(db: Db, config: CentralisConfig, provider: string,
     for (const s of subs) {
       const [open] = await db.query(`select 1 from lastro.payment_reviews where subscription_id = $1 and kind = 'cancel_renewal' and status = 'open'`, [s.id]);
       if (!open) await openReview(db, { kind: "cancel_renewal", userId: order.user_id, orderId: order.id, subscriptionId: s.id, provider, retry: true, detail: { reason: "upgrade_to_lifetime" } });
+    }
+    // The gateway renews the monthly plan by itself and has no API to stop it (Kirvano): a person
+    // cancels it there. Until resolved, the profile says the cancellation is in progress.
+    if (ev.gatewayRenewsMonthly) {
+      const monthly = await db.query<{ id: string }>(
+        `select o.id from lastro.orders o
+          where o.user_id = $1 and o.provider = $2 and o.plan_id = 'mensal' and o.status = 'approved'
+            and not exists (select 1 from lastro.payment_reviews r where r.order_id = o.id and r.kind = 'cancel_renewal')`,
+        [order.user_id, provider],
+      );
+      for (const m of monthly) {
+        await openReview(db, { kind: "cancel_renewal", userId: order.user_id, orderId: m.id, provider, detail: { reason: "upgrade_to_lifetime", manual: true, upgrade_order_id: order.id } });
+      }
     }
   }
 
@@ -322,6 +378,36 @@ async function renew(db: Db, config: CentralisConfig, provider: string, ev: Paym
     order: { external_order_id: sub.order_id, external_charge_id: charge.id },
   });
   await refreshUserPlan(db, config, sub.user_id, ev.occurredAt);
+  return "applied";
+}
+
+/** One more paid month on an approved monthly order (gateway-side renewal without a Lastro subscription). */
+async function renewOrder(db: Db, config: CentralisConfig, provider: string, order: Order, ev: PaymentEvent): Promise<HandleResult> {
+  const plan = (await getPlan(db, order.plan_id)) as Plan;
+  const before = await getAccess(db, order.user_id, ev.occurredAt, HOLDINGS);
+  const [first] = await db.query<{ affiliate_id: string | null; affiliate_code: string | null }>(
+    `select affiliate_id, affiliate_code from lastro.charges where order_id = $1 and kind = 'initial' limit 1`,
+    [order.id],
+  );
+  const charge = await insertCharge(db, {
+    order_id: order.id,
+    subscription_id: null,
+    provider,
+    gateway_transaction_id: ev.transactionId as string,
+    kind: "renewal",
+    amount_minor: ev.amountMinor as number,
+    currency: (ev.currency as string).toUpperCase(),
+    affiliate_id: first?.affiliate_id ?? null,
+    affiliate_code: first?.affiliate_code ?? null,
+    paidAt: ev.occurredAt,
+  });
+  if (!charge) return "duplicate";
+  await grantForCharge(db, { userId: order.user_id, chargeId: charge.id, planId: plan.id, billing: plan.billing, source: "renewal", paidAt: ev.occurredAt, periodStart: ev.periodStart, periodEnd: ev.periodEnd });
+  if (before.state === "lifetime") {
+    await openReview(db, { kind: "duplicate_purchase", userId: order.user_id, orderId: order.id, chargeId: charge.id, provider, transactionId: ev.transactionId, detail: { plan_id: plan.id, had: "lifetime", renewal: true } });
+  }
+  await enqueue(db, config, "purchase", await purchaseBody(db, charge, order, plan, ev.occurredAt), ev.occurredAt);
+  await refreshUserPlan(db, config, order.user_id, ev.occurredAt);
   return "applied";
 }
 

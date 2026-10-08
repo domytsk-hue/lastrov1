@@ -171,9 +171,9 @@ test("duplicate webhook (same event, or same transaction under a new event id) c
 test("sandbox webhooks must be signed; nothing but a verified webhook approves an order", async () => {
   const provider = createSandboxProvider("whsec_test");
   const body = JSON.stringify({ id: "evt_x", type: "payment.approved", order_id: randomUUID(), transaction_id: "tx", amount_minor: 9990, currency: "BRL" });
-  assert.equal(await provider.parseWebhook(body, new Headers({ "x-sandbox-signature": "0".repeat(64) })), null);
-  assert.equal(await provider.parseWebhook(body, new Headers()), null);
-  const events = await provider.parseWebhook(body, new Headers({ "x-sandbox-signature": signSandboxWebhook("whsec_test", body) }));
+  assert.equal(await provider.parseWebhook(body, new Headers({ "x-sandbox-signature": "0".repeat(64) }), new URL("https://x/")), null);
+  assert.equal(await provider.parseWebhook(body, new Headers(), new URL("https://x/")), null);
+  const events = await provider.parseWebhook(body, new Headers({ "x-sandbox-signature": signSandboxWebhook("whsec_test", body) }), new URL("https://x/"));
   assert.equal(events?.[0].amountMinor, 9990);
 });
 

@@ -1,11 +1,12 @@
 import "server-only";
 import type { PaymentProvider } from "./provider.ts";
 import { createSandboxProvider, type SandboxState } from "./sandbox.ts";
+import { createKirvanoProvider, kirvanoConfig } from "./kirvano.ts";
 
 /**
- * Which gateways exist in this deployment. Adding Mercado Pago / Asaas / Pagar.me / Stripe
- * means writing one PaymentProvider adapter and registering it here — nothing else changes.
- * Until then PAYMENT_PROVIDER is empty and checkout answers "payments unavailable".
+ * Which gateways exist in this deployment: "kirvano" (production, hosted checkout) and
+ * "sandbox" (isolated tests). Another gateway is one more adapter registered here. With
+ * PAYMENT_PROVIDER empty, or Kirvano not fully configured, checkout answers "payments unavailable".
  */
 
 /**
@@ -21,6 +22,11 @@ export function sandboxAllowed(env: NodeJS.ProcessEnv = process.env): boolean {
 const g = globalThis as unknown as { __lastroSandbox?: SandboxState };
 
 export function getPaymentProvider(id: string | null | undefined, env: NodeJS.ProcessEnv = process.env): PaymentProvider | null {
+  if (id === "kirvano") {
+    // Only when fully configured (webhook token + both offer pages); otherwise "unavailable".
+    const config = kirvanoConfig(env);
+    return config ? createKirvanoProvider(config) : null;
+  }
   if (id === "sandbox") {
     if (!sandboxAllowed(env)) return null;
     g.__lastroSandbox ??= { payments: new Map(), cancelled: new Set(), failCancellation: false };

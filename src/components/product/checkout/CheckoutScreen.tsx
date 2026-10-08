@@ -10,7 +10,7 @@ import { formatBRL } from "@/lib/format";
 import { maskCpf, maskPhone, parseBillingName, parseCpf, parseEmail, parsePhone } from "@/lib/billing";
 import { useAuth } from "@/auth/auth-store";
 import type { AccessSummary } from "@/config/access";
-import { PLAN_BENEFITS, PLANS, toMajorUnits, type PlanId } from "@/config/plans";
+import { PLAN_BENEFITS, PLANS, isPlanId, toMajorUnits, type PlanId } from "@/config/plans";
 import { AUTH_ROUTES, CHECKOUT_ROUTE, MARKETING_ROUTES, ROUTES } from "@/config/routes";
 import { ease, spring } from "@/design-system/motion";
 import { LastroLoader, LastroMark } from "@/components/shared/brand/LastroMark";
@@ -30,7 +30,7 @@ type Instructions = { kind: "pix"; copyPaste: string; qrCodeImage: string | null
 interface CheckoutInfo {
   account: { name: string; email: string | null; phone: string | null };
   access: AccessSummary;
-  payments: { available: boolean; methods: Method[]; recurring: boolean };
+  payments: { available: boolean; methods: Method[]; recurring: boolean; hosted: boolean; autoRenews: boolean; name: string | null };
 }
 
 type Phase =
@@ -111,6 +111,8 @@ export function CheckoutScreen({ initialPlan, orderId }: { initialPlan: PlanId |
       if (data.payments.methods.length && !data.payments.methods.includes("pix")) setMethod(data.payments.methods[0]);
       // An order already waiting for payment is followed, not duplicated.
       if (!orderId && a.pendingOrder) setPhase({ name: "processing", orderId: a.pendingOrder.id });
+      // Back from the gateway's page: the same plan continues the same order (no second charge).
+      if (a.pendingOrder && isPlanId(a.pendingOrder.planId) && a.state !== "monthly") setPlan(a.pendingOrder.planId);
     } catch {
       setLoadError(true);
     }
@@ -125,6 +127,8 @@ export function CheckoutScreen({ initialPlan, orderId }: { initialPlan: PlanId |
   const chosen = PLANS[plan];
   const amount = formatBRL(toMajorUnits(chosen.amountMinor));
   const accountEmail = info?.account.email ?? null;
+  const hosted = info?.payments.hosted ?? false;
+  const gatewayName = info?.payments.name ?? "o meio de pagamento";
 
   const errors: Record<Fields, string | null> = useMemo(() => {
     const r = (x: { ok: boolean; error?: string }) => (x.ok ? null : (x as { error: string }).error);
@@ -197,13 +201,14 @@ export function CheckoutScreen({ initialPlan, orderId }: { initialPlan: PlanId |
       setFormError(ERRORS.payments_unavailable);
       return;
     }
-    if (Object.values(errors).some(Boolean)) return;
+    if (!hosted && Object.values(errors).some(Boolean)) return;
     setPhase({ name: "creating" });
     try {
       const { status, data } = await getJson<{ ok: boolean; error?: string; fields?: Partial<Record<Fields, string>>; order_id?: string; instructions?: Instructions }>("/api/checkout", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ plan_id: plan, method, name: values.name, email: values.email, cpf: values.cpf, phone: values.phone, idempotency_key: key.current }),
+        // A hosted checkout (Kirvano) collects billing data on its own page: send only the plan.
+        body: JSON.stringify(hosted ? { plan_id: plan, idempotency_key: key.current } : { plan_id: plan, method, name: values.name, email: values.email, cpf: values.cpf, phone: values.phone, idempotency_key: key.current }),
       });
       if (status === 401) {
         router.replace(`${AUTH_ROUTES.login}?next=${encodeURIComponent(CHECKOUT_ROUTE)}`);
@@ -275,7 +280,7 @@ export function CheckoutScreen({ initialPlan, orderId }: { initialPlan: PlanId |
             ) : phase.name === "pix" ? (
               <PixPanel key="pix" amount={amount} plan={chosen.name} instructions={phase.instructions} onChange={() => setPhase({ name: "form" })} />
             ) : phase.name === "processing" ? (
-              <Waiting key="wait" onChange={() => setPhase({ name: "form" })} />
+              <Waiting key="wait" hosted={hosted} gatewayName={gatewayName} onChange={() => setPhase({ name: "form" })} />
             ) : (
               <motion.div key="form" initial={reduce ? false : { opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} transition={{ duration: 0.3, ease: ease.out }}>
                 <h1 className="font-display text-[36px] leading-[1.05] font-semibold tracking-[-0.035em] text-ink-900 lg:text-[48px]">
@@ -300,6 +305,20 @@ export function CheckoutScreen({ initialPlan, orderId }: { initialPlan: PlanId |
                   <div className="flex min-w-0 flex-col gap-8">
                     <PlanPicker value={plan} onChange={setPlan} monthlyDisabled={upgrade} />
 
+                    {hosted ? (
+                      <div className="surface-light flex items-start gap-3 rounded-[32px] p-5 sm:p-6">
+                        <span className="grid size-10 shrink-0 place-items-center rounded-full bg-electric/10 text-electric">
+                          <ShieldCheck className="size-5" aria-hidden />
+                        </span>
+                        <div>
+                          <p className="font-semibold text-ink-900">Pagamento seguro pela {gatewayName}</p>
+                          <p className="mt-1 text-[14px] leading-relaxed text-ink-500">
+                            Na próxima tela você escolhe Pix ou cartão e informa os dados de pagamento. Use o e-mail da sua conta{accountEmail ? ` (${accountEmail})` : ""}. Assim que a {gatewayName} confirmar, seu acesso é liberado aqui — sem precisar entrar de novo.
+                          </p>
+                        </div>
+                      </div>
+                    ) : (
+                    <>
                     <fieldset className="surface-light rounded-[32px] p-5 sm:p-6">
                       <legend className="sr-only">Dados de cobrança</legend>
                       <p className="eyebrow mb-4 text-ink-500">Dados de cobrança</p>
@@ -345,6 +364,8 @@ export function CheckoutScreen({ initialPlan, orderId }: { initialPlan: PlanId |
                           : "Os dados do cartão são digitados no ambiente seguro do meio de pagamento — o Lastro não vê nem guarda o número do cartão."}
                       </p>
                     </div>
+                    </>
+                    )}
                   </div>
 
                   <Summary
@@ -352,6 +373,9 @@ export function CheckoutScreen({ initialPlan, orderId }: { initialPlan: PlanId |
                     method={method}
                     amount={amount}
                     recurring={info.payments.recurring}
+                    hosted={hosted}
+                    autoRenews={info.payments.autoRenews}
+                    gatewayName={gatewayName}
                     upgrade={upgrade}
                     available={info.payments.available}
                     busy={phase.name === "creating"}
@@ -428,6 +452,9 @@ function Summary({
   method,
   amount,
   recurring,
+  hosted,
+  autoRenews,
+  gatewayName,
   upgrade,
   available,
   busy,
@@ -440,6 +467,9 @@ function Summary({
   method: Method;
   amount: string;
   recurring: boolean;
+  hosted: boolean;
+  autoRenews: boolean;
+  gatewayName: string;
   upgrade: boolean;
   available: boolean;
   busy: boolean;
@@ -452,7 +482,9 @@ function Summary({
   const renewal =
     p.billing === "one_time"
       ? "Pagamento único. Sem mensalidade e sem renovação."
-      : recurring && method === "card"
+      : hosted && autoRenews
+        ? `Renova todo mês pela ${gatewayName} até a assinatura ser cancelada. O acesso vale até o fim do mês já pago.`
+        : recurring && method === "card"
         ? "Renova todo mês no cartão até você cancelar no seu perfil. O acesso vale até o fim do mês já pago."
         : "Cada pagamento libera um mês de acesso. Não há débito automático: você renova quando quiser.";
   return (
@@ -475,7 +507,7 @@ function Summary({
         <dl className="mt-5 flex flex-col gap-2 border-t border-ink-900/[0.06] pt-4 text-[14px]">
           <div className="flex justify-between gap-3">
             <dt className="text-ink-500">Forma de pagamento</dt>
-            <dd className="font-semibold text-ink-900">{method === "pix" ? "Pix" : "Cartão"}</dd>
+            <dd className="font-semibold text-ink-900">{hosted ? "Pix ou cartão" : method === "pix" ? "Pix" : "Cartão"}</dd>
           </div>
           <div className="flex justify-between gap-3">
             <dt className="text-ink-500">Cobrança</dt>
@@ -504,11 +536,11 @@ function Summary({
         >
           {busy ? (
             <>
-              <Loader2 className="size-5 animate-spin" aria-hidden /> Criando cobrança…
+              <Loader2 className="size-5 animate-spin" aria-hidden /> {hosted ? "Abrindo o pagamento…" : "Criando cobrança…"}
             </>
           ) : available ? (
             <>
-              Pagar {amount} com {method === "pix" ? "Pix" : "cartão"} <ArrowRight className="size-[18px]" aria-hidden />
+              {hosted ? `Pagar ${amount} na ${gatewayName}` : `Pagar ${amount} com ${method === "pix" ? "Pix" : "cartão"}`} <ArrowRight className="size-[18px]" aria-hidden />
             </>
           ) : (
             "Pagamentos indisponíveis no momento"
@@ -536,7 +568,7 @@ function Summary({
             <Link href={MARKETING_ROUTES.privacidade} className="font-semibold text-ink-700 underline-offset-2 hover:underline">
               Privacidade
             </Link>
-            . O CPF vai só para o meio de pagamento.
+            . {hosted ? `Os dados de pagamento ficam com a ${gatewayName}; o Lastro não recebe o número do cartão.` : "O CPF vai só para o meio de pagamento."}
           </span>
         </p>
       </div>
@@ -621,15 +653,18 @@ function PixPanel({ amount, plan, instructions, onChange }: { amount: string; pl
 
 /* ------------------------------ waiting / confirmed ------------------------------ */
 
-function Waiting({ onChange }: { onChange: () => void }) {
+function Waiting({ onChange, hosted, gatewayName }: { onChange: () => void; hosted: boolean; gatewayName: string }) {
   const reduce = useReducedMotion();
   return (
     <motion.section initial={reduce ? false : { opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="mx-auto flex max-w-[480px] flex-col items-center py-16 text-center" aria-live="polite">
       <LastroMark size={72} loading />
       <h1 className="mt-8 font-display text-[28px] font-semibold tracking-[-0.03em] text-ink-900">Aguardando confirmação do pagamento.</h1>
-      <p className="mt-2 text-[15px] text-ink-500">Pode levar alguns instantes. Você não precisa pagar de novo — se fechar esta tela, a confirmação acontece mesmo assim.</p>
+      <p className="mt-2 text-[15px] text-ink-500">
+        Pode levar alguns instantes. Você não precisa pagar de novo — se fechar esta tela, a confirmação acontece mesmo assim.
+        {hosted ? ` Ainda não concluiu o pagamento na ${gatewayName}? Volte e continue de onde parou.` : ""}
+      </p>
       <button type="button" onClick={onChange} className="mt-6 inline-flex h-11 items-center gap-2 rounded-full px-4 text-[14px] font-semibold text-ink-700 hover:bg-ink-900/5">
-        <ArrowLeft className="size-4" aria-hidden /> Voltar aos planos
+        <ArrowLeft className="size-4" aria-hidden /> {hosted ? "Voltar e continuar o pagamento" : "Voltar aos planos"}
       </button>
     </motion.section>
   );

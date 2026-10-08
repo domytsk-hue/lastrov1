@@ -22,7 +22,8 @@ export type PaymentEventType =
   | "payment.expired"      // a Pix that was never paid
   | "payment.refunded"     // refund or chargeback of a confirmed charge
   | "subscription.renewed" // a recurring charge was paid
-  | "subscription.cancelled";
+  | "subscription.cancelled"
+  | "unhandled";           // an authentic event Lastro doesn't know: kept for a person, never guessed
 
 export interface PaymentEvent {
   /** The gateway's own event id — deduplicates webhook retries. */
@@ -43,15 +44,32 @@ export interface PaymentEvent {
   periodEnd?: Date;
   /** "refund" or "chargeback", for payment.refunded. */
   refundReason?: "refund" | "chargeback";
+  /** The plan the gateway says was sold (e.g. from its offer id) — must match the order's. */
+  planId?: string;
+  /** How it was paid, when the gateway's own page chose it. */
+  method?: PaymentMethod;
+  /**
+   * The buyer's e-mail as typed on the gateway's page. Used ONLY in memory to find the order
+   * when the gateway lost our reference; never stored, never sent anywhere.
+   */
+  customerEmail?: string;
+  /**
+   * The gateway renews monthly plans by itself and Lastro can't stop that by API (Kirvano):
+   * after an upgrade, a person must cancel the old monthly subscription at the gateway.
+   */
+  gatewayRenewsMonthly?: boolean;
+  /** For "unhandled": the gateway's own event name (no payload, no personal data). */
+  gatewayEventName?: string;
   occurredAt: Date;
 }
 
 export interface CheckoutRequest {
   orderId: string;
   plan: { id: string; name: string; amountMinor: number; currency: string; billing: "one_time" | "monthly" };
-  method: PaymentMethod;
-  /** Billing data goes to the gateway only; Lastro does not store the CPF. */
-  customer: { userId: string; name: string; email: string; phone: string; document: string };
+  /** null when the gateway's own page lets the buyer choose. */
+  method: PaymentMethod | null;
+  /** Billing data goes to the gateway only; Lastro does not store the CPF. null with a hosted checkout. */
+  customer: { userId: string; name: string; email: string; phone: string; document: string } | null;
   /** Where the gateway sends the buyer back. The page only ASKS the server for the status. */
   returnUrl: string;
 }
@@ -73,11 +91,18 @@ export interface CheckoutResult {
 export interface PaymentProvider {
   id: string;
   methods: PaymentMethod[];
-  /** True only when the gateway really charges recurring subscriptions. */
+  /** True only when Lastro can manage recurring subscriptions through the gateway (cancel renewal). */
   supportsSubscriptions: boolean;
+  /**
+   * The gateway's own page collects the billing data (name, e-mail, CPF, phone) and the
+   * method (Pix or card). Lastro then asks for none of it: plan → redirect.
+   */
+  hostedCheckout?: boolean;
+  /** The monthly plan is renewed automatically by the gateway (Lastro learns of each renewal by webhook). */
+  autoRenews?: boolean;
   createCheckout(req: CheckoutRequest): Promise<CheckoutResult>;
   /** Verifies the webhook's authenticity; returns null when it is not authentic. */
-  parseWebhook(rawBody: string, headers: Headers): Promise<PaymentEvent[] | null>;
+  parseWebhook(rawBody: string, headers: Headers, url: URL): Promise<PaymentEvent[] | null>;
   /** Authenticated server-side status query (the page's "check again"). */
   getPayment?(providerPaymentId: string): Promise<PaymentEvent | null>;
   /** Stops future renewals; the paid period is kept. */

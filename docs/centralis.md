@@ -167,8 +167,10 @@ transaction id becomes at most one charge and one access entitlement, so duplica
 produce one purchase. Approving the order, granting access, mirroring the plan and queueing
 `purchase` happen in one database transaction.
 
-Gateways are adapters (`src/server/payments/provider.ts`), registered in `registry.ts`. The
-`sandbox` adapter exercises the whole flow in isolated environments only. Prices come from the
+Gateways are adapters (`src/server/payments/provider.ts`), registered in `registry.ts`:
+`kirvano` in production (hosted checkout, token-authenticated webhooks) and `sandbox`, which
+exercises the whole flow in isolated environments only. For Kirvano sales, Centralis receives
+`payment_method: "kirvano"` and the amount Kirvano confirmed. Prices come from the
 plan catalog (`src/config/plans.ts`), never from the browser. Checkout, plan access, the
 paywall switch and the gateway checklist are in [`payments.md`](payments.md).
 

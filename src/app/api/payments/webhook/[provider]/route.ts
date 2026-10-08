@@ -15,7 +15,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ provide
   const provider = getPaymentProvider(id);
   if (!provider) return NextResponse.json({ error: "unknown_provider" }, { status: 404 });
   const raw = await req.text();
-  const events = await provider.parseWebhook(raw, req.headers);
+  const events = await provider.parseWebhook(raw, req.headers, new URL(req.url));
   if (!events) return NextResponse.json({ error: "invalid_signature" }, { status: 401 });
 
   const db = await getDb();

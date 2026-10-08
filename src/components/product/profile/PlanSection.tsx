@@ -22,16 +22,18 @@ export function PlanSection() {
   const toast = useToast();
   const [access, setAccess] = useState<AccessSummary | null>(initial);
   const [recurring, setRecurring] = useState(false);
+  const [gatewayRenews, setGatewayRenews] = useState<string | null>(null);
   const [cancelling, setCancelling] = useState<"idle" | "confirm" | "busy">("idle");
 
   useEffect(() => {
     let alive = true;
     fetch("/api/me/access", { credentials: "same-origin", cache: "no-store" })
-      .then((r) => (r.ok ? (r.json() as Promise<{ access: AccessSummary; payments: { recurring: boolean } }>) : Promise.reject()))
+      .then((r) => (r.ok ? (r.json() as Promise<{ access: AccessSummary; payments: { recurring: boolean; autoRenews: boolean; provider: string | null } }>) : Promise.reject()))
       .then((d) => {
         if (!alive) return;
         setAccess(d.access);
         setRecurring(d.payments.recurring);
+        setGatewayRenews(d.payments.autoRenews ? (d.payments.provider === "kirvano" ? "Kirvano" : "meio de pagamento") : null);
       })
       .catch(() => {});
     return () => {
@@ -95,7 +97,12 @@ export function PlanSection() {
             </span>
           )}
           {sub?.cancelAtPeriodEnd && <span>Renovação cancelada — o acesso termina na data acima.</span>}
-          {!sub && <span>Cada pagamento libera um mês. Não há débito automático.</span>}
+          {!sub &&
+            (gatewayRenews ? (
+              <span>Renovação automática todo mês pela {gatewayRenews}. A data acima avança a cada pagamento confirmado.</span>
+            ) : (
+              <span>Cada pagamento libera um mês. Não há débito automático.</span>
+            ))}
         </span>
       );
       cta = (
