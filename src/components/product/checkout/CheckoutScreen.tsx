@@ -16,6 +16,7 @@ import { ease, spring } from "@/design-system/motion";
 import { LastroLoader, LastroMark } from "@/components/shared/brand/LastroMark";
 import { Segmented } from "@/components/shared/ui/primitives";
 import { TextField } from "@/components/auth/AuthScreen";
+import { CardFields, type CardFieldsHandle } from "./CardFields";
 
 /**
  * The Lastro checkout, between sign-up and the app. It only ever ASKS the server: the price
@@ -30,7 +31,7 @@ type Instructions = { kind: "pix"; copyPaste: string; qrCodeImage: string | null
 interface CheckoutInfo {
   account: { name: string; email: string | null; phone: string | null };
   access: AccessSummary;
-  payments: { available: boolean; methods: Method[]; recurring: boolean; hosted: boolean; autoRenews: boolean; name: string | null; fields: Fields[] };
+  payments: { available: boolean; methods: Method[]; recurring: boolean; hosted: boolean; autoRenews: boolean; name: string | null; fields: Partial<Record<Method, Fields[]>>; card: { gateway: string; publicKey: string | null } | null };
 }
 
 type Phase =
@@ -49,6 +50,7 @@ const ERRORS: Record<string, string> = {
   already_monthly: "Seu plano mensal já está ativo. Você pode mudar para o vitalício.",
   plan_not_found: "Esse plano não está disponível.",
   invalid_method: "Escolha Pix ou cartão.",
+  invalid_card: "Confira os dados do cartão.",
   idempotency_conflict: "Seu pedido mudou. Confira e tente de novo.",
   gateway_error: "Não conseguimos falar com o meio de pagamento agora. Tente de novo em instantes — nada foi cobrado em dobro.",
   network: "Sem conexão. Verifique sua internet e tente de novo.",
@@ -82,6 +84,7 @@ export function CheckoutScreen({ initialPlan, orderId }: { initialPlan: PlanId |
   const [serverFields, setServerFields] = useState<Partial<Record<Fields, string>>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [deferring, setDeferring] = useState(false);
+  const cardRef = useRef<CardFieldsHandle>(null);
   // Same intent → same key: a double click, a retry after a timeout or a refresh can't open two charges.
   const key = useRef(newKey());
   const closed = phase.name === "closed";
@@ -129,21 +132,23 @@ export function CheckoutScreen({ initialPlan, orderId }: { initialPlan: PlanId |
   const accountEmail = info?.account.email ?? null;
   const hosted = info?.payments.hosted ?? false;
   const gatewayName = info?.payments.name ?? "o meio de pagamento";
-  // The billing fields this gateway needs from Lastro (all four by default).
-  const fields: Fields[] = info?.payments.fields ?? [];
-  // Only the methods this gateway takes (Disrupty: Pix for now).
+  // The billing fields this method's gateway needs from Lastro.
+  const fields: Fields[] = info?.payments.fields[method] ?? [];
+  // Card typed into the card gateway's own secure fields (tokenized in the browser).
+  const cardKey = method === "card" ? (info?.payments.card?.publicKey ?? null) : null;
+  // Only the methods offered (each has its own gateway).
   const methods: Method[] = info?.payments.methods.length ? info.payments.methods : ["pix", "card"];
 
   const errors: Record<Fields, string | null> = useMemo(() => {
     const r = (x: { ok: boolean; error?: string }) => (x.ok ? null : (x as { error: string }).error);
-    const need = (f: Fields) => (info?.payments.fields ?? []).includes(f);
+    const need = (f: Fields) => (info?.payments.fields[method] ?? []).includes(f);
     return {
       name: need("name") ? r(parseBillingName(values.name)) : null,
       email: need("email") && !accountEmail ? r(parseEmail(values.email)) : null,
       cpf: need("cpf") ? r(parseCpf(values.cpf)) : null,
       phone: need("phone") ? r(parsePhone(values.phone)) : null,
     };
-  }, [values, accountEmail, info]);
+  }, [values, accountEmail, info, method]);
   const show = (f: Fields) => serverFields[f] || ((submitted || touched[f]) && errors[f]) || null;
   const set = (f: Fields) => (v: string) => {
     setValues((s) => ({ ...s, [f]: f === "cpf" ? maskCpf(v) : f === "phone" ? maskPhone(v) : v }));
@@ -208,6 +213,18 @@ export function CheckoutScreen({ initialPlan, orderId }: { initialPlan: PlanId |
     }
     if (Object.values(errors).some(Boolean)) return;
     setPhase({ name: "creating" });
+    // Card: Mercado Pago turns the typed card into a single-use token; only that reaches Lastro.
+    let card: Awaited<ReturnType<CardFieldsHandle["tokenize"]>> | null = null;
+    if (cardKey) {
+      try {
+        if (!cardRef.current) throw new Error(ERRORS.invalid_card);
+        card = await cardRef.current.tokenize(values.cpf);
+      } catch (err) {
+        setPhase({ name: "form" });
+        setFormError(err instanceof Error && err.message ? err.message : ERRORS.invalid_card);
+        return;
+      }
+    }
     try {
       const { status, data } = await getJson<{ ok: boolean; error?: string; fields?: Partial<Record<Fields, string>>; order_id?: string; instructions?: Instructions }>("/api/checkout", {
         method: "POST",
@@ -218,6 +235,7 @@ export function CheckoutScreen({ initialPlan, orderId }: { initialPlan: PlanId |
           idempotency_key: key.current,
           ...(hosted ? {} : { method }),
           ...Object.fromEntries(fields.map((f) => [f, values[f]])),
+          ...(card ? { card } : {}),
         }),
       });
       if (status === 401) {
@@ -377,8 +395,13 @@ export function CheckoutScreen({ initialPlan, orderId }: { initialPlan: PlanId |
                         {method === "pix" ? <QrCode className="mt-0.5 size-4 shrink-0" aria-hidden /> : <CreditCard className="mt-0.5 size-4 shrink-0" aria-hidden />}
                         {method === "pix"
                           ? "Você recebe um código Pix para pagar no app do seu banco. O acesso é liberado quando o pagamento é confirmado."
-                          : "Os dados do cartão são digitados no ambiente seguro do meio de pagamento — o Lastro não vê nem guarda o número do cartão."}
+                          : "Os dados do cartão são digitados no ambiente seguro do Mercado Pago — o Lastro não vê nem guarda o número do cartão."}
                       </p>
+                      {cardKey && (
+                        <div className="surface-light mt-4 rounded-[32px] p-5 sm:p-6">
+                          <CardFields ref={cardRef} publicKey={cardKey} submitted={submitted} />
+                        </div>
+                      )}
                     </div>
                     )}
                   </div>

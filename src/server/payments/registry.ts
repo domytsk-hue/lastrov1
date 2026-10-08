@@ -1,12 +1,15 @@
 import "server-only";
-import type { PaymentProvider } from "./provider.ts";
+import type { PaymentMethod, PaymentProvider } from "./provider.ts";
 import { createSandboxProvider, type SandboxState } from "./sandbox.ts";
-import { createDisruptyProvider, disruptyConfig } from "./disrupty.ts";
+import { createMercadoPagoProvider, mercadoPagoConfig } from "./mercadopago.ts";
 
 /**
- * Which gateways exist in this deployment: "disrupty" (production, Pix on Lastro's own
- * checkout) and "sandbox" (isolated tests). Another gateway is one more adapter registered here.
- * With PAYMENT_PROVIDER empty, or Disrupty not fully configured, checkout answers "payments unavailable".
+ * Which gateways exist in this deployment. Each payment method has its own gateway:
+ *   PAYMENT_PROVIDER_PIX  — Pix  ("simplify", once its adapter exists)
+ *   PAYMENT_PROVIDER_CARD — card ("mercadopago")
+ * PAYMENT_PROVIDER sets both at once (e.g. "sandbox" in isolated tests). A method whose gateway
+ * is missing or not fully configured simply isn't offered; none at all → "payments unavailable".
+ * Each order remembers its gateway, so webhooks, status checks and refunds go to the right one.
  */
 
 /**
@@ -22,10 +25,10 @@ export function sandboxAllowed(env: NodeJS.ProcessEnv = process.env): boolean {
 const g = globalThis as unknown as { __lastroSandbox?: SandboxState };
 
 export function getPaymentProvider(id: string | null | undefined, env: NodeJS.ProcessEnv = process.env): PaymentProvider | null {
-  if (id === "disrupty") {
-    // Only when fully configured (both keys + both offer ids); otherwise "unavailable".
-    const config = disruptyConfig(env);
-    return config ? createDisruptyProvider(config) : null;
+  if (id === "mercadopago") {
+    // Only when fully configured (access token, public key, webhook secret); otherwise unavailable.
+    const config = mercadoPagoConfig(env);
+    return config ? createMercadoPagoProvider(config) : null;
   }
   if (id === "sandbox") {
     if (!sandboxAllowed(env)) return null;
@@ -35,5 +38,20 @@ export function getPaymentProvider(id: string | null | undefined, env: NodeJS.Pr
   return null;
 }
 
-/** The gateway new checkouts use (PAYMENT_PROVIDER), or null when none is configured. */
-export const activePaymentProvider = (env: NodeJS.ProcessEnv = process.env) => getPaymentProvider(env.PAYMENT_PROVIDER, env);
+/** The gateway that takes `method` in new checkouts, or null when that method isn't offered. */
+export function providerForMethod(method: PaymentMethod, env: NodeJS.ProcessEnv = process.env): PaymentProvider | null {
+  const id = (method === "pix" ? env.PAYMENT_PROVIDER_PIX : env.PAYMENT_PROVIDER_CARD) || env.PAYMENT_PROVIDER;
+  const p = getPaymentProvider(id, env);
+  return p && p.methods.includes(method) ? p : null;
+}
+
+/** Every method offered right now, with its gateway (Pix first). */
+export function checkoutProviders(env: NodeJS.ProcessEnv = process.env): { method: PaymentMethod; provider: PaymentProvider }[] {
+  return (["pix", "card"] as PaymentMethod[]).flatMap((method) => {
+    const provider = providerForMethod(method, env);
+    return provider ? [{ method, provider }] : [];
+  });
+}
+
+/** Looks a gateway up by the id an order or subscription stored. */
+export const providerById = (id: string) => getPaymentProvider(id);

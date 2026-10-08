@@ -9,7 +9,7 @@ import { verifyRequest } from "./signature.ts";
 import { continueInitialSync } from "./user-sync.ts";
 import { expireLapsedPlans } from "../access/entitlements.ts";
 import { processRenewalCancellations } from "../payments/checkout.ts";
-import { activePaymentProvider } from "../payments/registry.ts";
+import { providerById } from "../payments/registry.ts";
 
 /**
  * Scheduled upkeep that must not depend on anyone opening the app: monthly plans that ran
@@ -19,7 +19,7 @@ import { activePaymentProvider } from "../payments/registry.ts";
 async function billingUpkeep() {
   const db = await getDb();
   const expired = await expireLapsedPlans(db, centralisConfig());
-  const cancellations = await processRenewalCancellations(db, activePaymentProvider());
+  const cancellations = await processRenewalCancellations(db, providerById);
   return { expired, cancellations };
 }
 

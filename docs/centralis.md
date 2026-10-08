@@ -168,10 +168,10 @@ produce one purchase. Approving the order, granting access, mirroring the plan a
 `purchase` happen in one database transaction.
 
 Gateways are adapters (`src/server/payments/provider.ts`), registered in `registry.ts`:
-`disrupty` in production (Pix on Lastro's own checkout; every webhook re-checked with
-Disrupty's API) and `sandbox`, which exercises the whole flow in isolated environments only.
-For Disrupty sales, Centralis receives `payment_method: "disrupty"` and the amount Disrupty
-confirmed. Prices come from the
+one per payment method — `mercadopago` for card (signed webhooks, every payment re-checked
+with Mercado Pago's API), Simplify for Pix once its adapter exists — and `sandbox`, which
+exercises the whole flow in isolated environments only. Centralis receives the gateway id as
+`payment_method` and the amount the gateway confirmed. Prices come from the
 plan catalog (`src/config/plans.ts`), never from the browser. Checkout, plan access, the
 paywall switch and the gateway checklist are in [`payments.md`](payments.md).
 

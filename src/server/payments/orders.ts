@@ -132,7 +132,7 @@ export async function handlePaymentEvent(db: Db, config: CentralisConfig, provid
     );
     if (!fresh.length) return "duplicate";
 
-    // Gateways that don't echo our order id (Disrupty): the charge id it gave at checkout finds it.
+    // Gateways that don't echo our order id: the charge id they gave at checkout finds it.
     if (!ev.orderId && ev.transactionId && (ev.type === "payment.approved" || ev.type === "payment.failed" || ev.type === "payment.expired")) {
       const [o] = await tx.query<{ id: string }>(`select id from lastro.orders where provider = $1 and provider_payment_id = $2`, [provider, ev.transactionId]);
       if (o) ev = { ...ev, orderId: o.id };

@@ -1,7 +1,8 @@
 # Checkout, plans and access
 
-How a Lastro account goes from sign-up to paid access, and how Disrupty, the payment
-gateway, plugs in. The rule behind all of it: **only a verified confirmation from the gateway turns
+How a Lastro account goes from sign-up to paid access, and how the payment gateways plug in:
+Simplify for Pix and Mercado Pago for card, both used only to process the payment — the buyer
+never leaves Lastro's checkout. The rule behind all of it: **only a verified confirmation from the gateway turns
 money into access.** No page, browser call, URL or button can.
 
 ## Plans — one catalog
@@ -194,7 +195,7 @@ Nothing new is invented; the existing outbox, events and attribution are reused.
 1. Apply `supabase/migrations/20261008000000_checkout_access.sql` on Supabase. It is
    additive and safe to run twice.
 2. Deploy this code with `LASTRO_PAYWALL` **unset**. Nothing changes for users.
-3. Configure Disrupty and validate it with a real sale ("Setting it up" below).
+3. Configure the gateways and validate each with a real sale ("Setting it up" below).
 4. Decide how to treat **existing accounts** (see pending decisions) and create their grants
    if any.
 5. Set `LASTRO_PAYWALL=on` and redeploy.
@@ -210,85 +211,81 @@ insert into lastro.access_entitlements (id, user_id, source, starts_at, ends_at,
 values (gen_random_uuid(), '<user id>', 'admin', now(), null, '<why>');
 ```
 
-## Disrupty (the production gateway)
+## Gateways — one per payment method
 
-Disrupty is used **only as the gateway**: the buyer never leaves Lastro. The checkout page is
-Lastro's own; Lastro asks Disrupty for a Pix charge and shows the QR code and the
-copy-and-paste code on its own page.
+| Method | Gateway | Variable | Adapter |
+|---|---|---|---|
+| Pix | Simplify | `PAYMENT_PROVIDER_PIX=simplify` | **pending** — its API documentation wasn't available yet |
+| Card | Mercado Pago | `PAYMENT_PROVIDER_CARD=mercadopago` | `src/server/payments/mercadopago.ts` |
 
-Adapter: `src/server/payments/disrupty.ts`.
+`PAYMENT_PROVIDER` sets both at once (e.g. `sandbox` in tests). A method whose gateway is
+missing or not fully configured is simply not offered; with none, payments are unavailable.
+Each order stores its gateway, so webhooks, the page's status checks and refunds always go to
+the gateway that charged it.
+
+## Mercado Pago (card)
+
+"Checkout Transparente": the card is typed on Lastro's page, into Mercado Pago's **secure
+fields** (Mercado Pago's iframes, styled like Lastro's inputs, `CardFields.tsx`). Mercado Pago
+returns a single-use token; only the token reaches Lastro. The card number and CVV never touch
+Lastro's page code, server, database, logs, analytics or Centralis.
 
 ```
-/checkout (Lastro) ──POST /api/checkout──► Lastro server ──POST /api/sales──► Disrupty
-                                            ◄── { id, status: PENDENTE, payment.pix.key }
-page shows QR + "copia e cola", polls /api/checkout/orders/<id>
-Disrupty webhook ──► /api/payments/webhook/disrupty ──GET /api/sales/<id>──► Disrupty → checks → access
+/checkout (Lastro) ── MercadoPago.js secure fields ──► card token (browser ↔ Mercado Pago)
+  ──POST /api/checkout { card: { token, payment_method_id, issuer_id } }──► Lastro server
+  ──POST /v1/payments { token, catalog price, installments: 1, external_reference: order id }──► Mercado Pago
+page polls /api/checkout/orders/<id> ──► GET /v1/payments/<id> (Mercado Pago) → checks → access
+Mercado Pago webhook ──(x-signature)──► /api/payments/webhook/mercadopago ──GET /v1/payments/<id>──► checks → access
 ```
 
-- **Keys.** `X-Api-Public-Key` and `X-Api-Private-Key` go on every call, from the server only.
-  The private key never reaches a browser, a log or Centralis.
-- **Creating the charge.** `POST /api/sales` with the plan's offer id, the plan's price in
-  reais (from the catalog, never from the browser), `paymentMethod: "PIX"` and the buyer's
-  name and e-mail. The order id goes as `Idempotency-Key`, so a retry doesn't open a second
-  charge. The sale id Disrupty answers is stored on the order (`provider_payment_id`).
-- **The QR code** is drawn by Lastro from Disrupty's own copy-and-paste code (same payload),
-  so the page loads nothing from third parties.
-- **Authenticity — the webhook is never trusted for what it says.** Lastro only takes the
-  sale id from it and asks Disrupty itself (`GET /api/sales/<id>`, authenticated with the
-  keys) what happened. Status and amount come from that answer, and the answer must be about
-  the same sale. A forged webhook can at most make Lastro double-check a real sale. This does
-  not depend on Disrupty's signature header (whose format wasn't in the documentation
-  received). Optionally, `DISRUPTY_WEBHOOK_TOKEN` is required as `?token=` on the webhook URL,
-  to turn noise away before any call.
-- **Matching the order.** By the sale id stored at checkout.
-- **Amount.** The confirmed amount must equal the plan's price; otherwise review, no access.
-- **Status mapping** (Portuguese and English spellings):
+- **Keys.** The access token stays on the server. The public key goes to the browser (it can
+  only create card tokens, not charges).
+- **The charge.** Price from the catalog (never the browser), 1 installment, our order id as
+  `external_reference`, buyer name/e-mail/CPF as payer (CPF goes to Mercado Pago only, never
+  stored). `X-Idempotency-Key` = hash of order id + card token: a retry can't charge twice; a
+  new card after a refusal is a new attempt.
+- **Authenticity.** The webhook's `x-signature` (HMAC-SHA256 over
+  `id:<data.id>;request-id:<x-request-id>;ts:<ts>;` with the webhook secret) must match —
+  otherwise `401` and no API call. Even then, the webhook is only a pointer: status and
+  amount come from `GET /v1/payments/<id>` with Lastro's access token.
+- **Status mapping:**
 
-  | Disrupty status | Lastro |
+  | Mercado Pago | Lastro |
   |---|---|
-  | `PENDENTE`, `AGUARDANDO_PAGAMENTO`, `PROCESSANDO` | pending (nothing released) |
-  | `PAGO`, `APROVADO`, `CONFIRMADO` (`PAID`, `APPROVED`, `COMPLETED`) | `payment.approved` |
-  | `RECUSADO`, `FALHOU`, `CANCELADO` | `payment.failed` |
-  | `EXPIRADO` | `payment.expired` |
-  | `ESTORNADO`, `REEMBOLSADO` / `CHARGEBACK`, `MED` | `payment.refunded` (refund / chargeback) |
-  | anything else | `unhandled` → a person looks at it, never a guessed approval |
+  | `approved` | `payment.approved` |
+  | `pending`, `in_process`, `authorized` | pending (nothing released) |
+  | `rejected`, `cancelled` | `payment.failed` |
+  | `refunded` / `charged_back` | `payment.refunded` (refund / chargeback) |
+  | `in_mediation`, anything else | `unhandled` → a person looks at it |
 
-- **Without a webhook.** The checkout page's "check again" asks Disrupty the same way, so a
-  lost webhook doesn't keep a paid buyer waiting. Webhook and page never count a sale twice.
-- **Methods.** Pix only. Card stays off until Disrupty's card schema / tokenization is known:
-  card data must never pass through Lastro's server.
-- **Monthly.** No subscriptions through Disrupty: Mensal is a Pix payment that gives one month.
-  When the month ends, the account buys another month (or upgrades to Vitalício at any time).
-- **Privacy.** Lastro sends Disrupty the buyer's name and e-mail only. No CPF is stored.
+- **Amount.** Must equal the plan's price; otherwise review, no access.
+- **Monthly.** One card payment = one month (no automatic renewal yet). When the month ends
+  the account pays another month, or upgrades to Vitalício.
 
 ### Setting it up (once)
 
-1. **In Disrupty**, create the two offers (Mensal R$ 19,90 and Vitalício R$ 99,90) and note
-   each offer id.
-2. **Create the API keys** (public `dsrp_pub_…` and private `dsrp_priv_…`).
-3. **On Vercel**, set `PAYMENT_PROVIDER=disrupty` and the `DISRUPTY_*` variables
-   (see `.env.example`).
-4. **Register the webhook** (events `transaction.paid` and `transaction.failed`):
-   - URL `https://<site>/api/payments/webhook/disrupty` (plus `?token=<DISRUPTY_WEBHOOK_TOKEN>`
-     if that variable is set);
-   - via `POST https://api.disruptybr.app/api/webhooks` with `{ "url": "…", "enabled": true }`
-     (as in Disrupty's documentation), or in its dashboard.
-5. **Make one real low-value test purchase** and check that the order is `approved` in
-   `lastro.orders` and no `unhandled_event` review is open.
-6. **Only then** turn on `LASTRO_PAYWALL=on`.
+1. **Mercado Pago → Suas integrações → Criar aplicação** ("Pagamentos online", "Checkout
+   Transparente"). Copy the production **Public key** and **Access token**.
+2. **Webhooks** in that application: URL `https://<site>/api/payments/webhook/mercadopago`,
+   event **Pagamentos**. Copy the **assinatura secreta**.
+3. **On Vercel**: `PAYMENT_PROVIDER_CARD=mercadopago`, `MERCADOPAGO_ACCESS_TOKEN`,
+   `MERCADOPAGO_PUBLIC_KEY`, `MERCADOPAGO_WEBHOOK_SECRET` (see `.env.example`).
+4. **One real low-value purchase**: the order is `approved` in `lastro.orders`, the
+   webhook shows `200` in Mercado Pago's panel, no open `unhandled_event` review. Refund it
+   from Mercado Pago and check the access is revoked.
+5. **Only then** `LASTRO_PAYWALL=on`.
 
-### To confirm with Disrupty
+## Simplify (Pix) — pending
 
-Not in the documentation received; the code is built to be safe either way:
-- the full `POST /api/sales` schema (CPF/phone fields, an external reference, Pix expiry);
-- every sale status name (unknown ones go to review);
-- the webhook body format and the signature header (not relied upon);
-- refunds and chargebacks (how they appear);
-- card: tokenization in the browser, so card data never touches Lastro.
+The Pix side is ready on Lastro's side (Pix panel with QR and copy-and-paste, order matched by
+the charge id the gateway returns, webhook re-checked with the gateway's API). The Simplify
+adapter needs its API documentation: base URL, authentication, creating a Pix charge (its
+response with the copy-and-paste code / QR and expiry), querying a charge, the webhook format
+and signature, status names and refunds.
 
 ## Without a gateway
 
-- `PAYMENT_PROVIDER` empty (or Disrupty not fully configured) → `POST /api/checkout` answers
+- No gateway configured for any method → `POST /api/checkout` answers
   `503 payments_unavailable` before storing anything: no order, no billing data, no event.
 - The checkout shows the plans, explains that payments aren't available yet, disables the pay
   button and keeps "Pagar depois".
@@ -324,11 +321,13 @@ Not in the documentation received; the code is built to be safe either way:
 | Variable | Where | Meaning |
 |---|---|---|
 | `LASTRO_PAYWALL` | server | `on` enforces plan access; unset = today's behavior |
-| `PAYMENT_PROVIDER` | server | `disrupty` in production; empty = payments unavailable |
-| `DISRUPTY_PUBLIC_KEY` / `DISRUPTY_PRIVATE_KEY` | server | API keys (`dsrp_pub_…` / `dsrp_priv_…`) |
-| `DISRUPTY_OFFER_ID_MENSAL` / `_VITALICIO` | server | Disrupty offer ids (numbers) |
-| `DISRUPTY_WEBHOOK_TOKEN` | server | optional, ≥ 16 chars, required as `?token=` on the webhook URL |
-| `DISRUPTY_API_URL` | server | optional, default `https://api.disruptybr.app` |
+| `PAYMENT_PROVIDER_PIX` | server | Pix gateway (`simplify`, once its adapter exists) |
+| `PAYMENT_PROVIDER_CARD` | server | card gateway: `mercadopago` |
+| `PAYMENT_PROVIDER` | server | both methods at once (e.g. `sandbox` in tests) |
+| `MERCADOPAGO_ACCESS_TOKEN` | server | Mercado Pago access token (secret) |
+| `MERCADOPAGO_PUBLIC_KEY` | server → browser | public key for the secure card fields |
+| `MERCADOPAGO_WEBHOOK_SECRET` | server | webhook "assinatura secreta" (≥ 16 chars) |
+| `MERCADOPAGO_STATEMENT_DESCRIPTOR` | server | optional, name on the card statement (default `LASTRO`) |
 | `PAYMENT_SANDBOX_SECRET` | dev/test only | sandbox webhook HMAC secret |
 | `CRON_SECRET` | server | the scheduled flush also runs plan expiry and renewal cancellations |
 

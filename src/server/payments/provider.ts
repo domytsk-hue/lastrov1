@@ -77,6 +77,11 @@ export interface CheckoutRequest {
    * the CPF. Fields the gateway's own page collects are null; no fields at all → null.
    */
   customer: { userId: string; name: string | null; email: string | null; phone: string | null; document: string | null } | null;
+  /**
+   * Card payments: the single-use token the gateway's own script made in the browser from the
+   * card typed in its secure fields. Never the card number or CVV — those don't reach Lastro.
+   */
+  card?: { token: string; paymentMethodId: string; issuerId: string | null } | null;
   /** Where the gateway sends the buyer back. The page only ASKS the server for the status. */
   returnUrl: string;
 }
@@ -112,6 +117,11 @@ export interface PaymentProvider {
    * with them). Default: all four, or none with a hosted checkout.
    */
   billingFields?: BillingField[];
+  /**
+   * The gateway's public key, for its script in the browser to tokenize the card (public by
+   * design: it can create tokens, not charges).
+   */
+  publicKey?: string;
   /** The monthly plan is renewed automatically by the gateway (Lastro learns of each renewal by webhook). */
   autoRenews?: boolean;
   createCheckout(req: CheckoutRequest): Promise<CheckoutResult>;

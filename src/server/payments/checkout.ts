@@ -13,6 +13,10 @@ import { ALL_BILLING_FIELDS, type BillingField, type CheckoutResult, type Paymen
  * buys (the session), what it costs (the catalog) and which affiliate it is attributed to.
  */
 
+/** A gateway, or a lookup by the id an order/subscription stored (several gateways at once). */
+export type ProviderRef = PaymentProvider | null | ((id: string) => PaymentProvider | null);
+const resolve = (ref: ProviderRef, id: string) => (typeof ref === "function" ? ref(id) : ref);
+
 export type CheckoutError =
   | "plan_not_found"
   | "invalid_method"
@@ -187,10 +191,11 @@ export interface OrderStatus {
  * pending, the gateway is asked server-side — an authenticated query is a valid confirmation,
  * applied through the same idempotent path as a webhook.
  */
-export async function orderStatus(db: Db, config: CentralisConfig, userId: string, orderId: string, provider: PaymentProvider | null): Promise<OrderStatus | null> {
+export async function orderStatus(db: Db, config: CentralisConfig, userId: string, orderId: string, providers: ProviderRef): Promise<OrderStatus | null> {
   if (!/^[0-9a-f-]{36}$/i.test(orderId)) return null;
   let [o] = await db.query<OrderRow>(`select * from lastro.orders where id = $1 and user_id = $2`, [orderId, userId]);
   if (!o) return null;
+  const provider = resolve(providers, o.provider);
   if (o.status === "pending" && provider && provider.id === o.provider && provider.getPayment && o.provider_payment_id) {
     const answer = await provider.getPayment(o.provider_payment_id).catch(() => null);
     // The answer must be about this order: our id echoed back, or (gateways that don't echo it) the charge id we asked for.
@@ -222,8 +227,8 @@ const cancelBackoffSeconds = (attempt: number) => Math.min(60 * 4 ** Math.max(0,
  * subscription is only marked as "won't renew" once the gateway says so. After the last
  * attempt the review stays open for a person.
  */
-export async function processRenewalCancellations(db: Db, provider: PaymentProvider | null, now = new Date(), limit = 20) {
-  if (!provider?.cancelSubscription) return { done: 0, failed: 0 };
+export async function processRenewalCancellations(db: Db, providers: ProviderRef, now = new Date(), limit = 20) {
+  if (typeof providers !== "function" && !providers?.cancelSubscription) return { done: 0, failed: 0 };
   const tasks = await db.query<{ id: string; subscription_id: string; attempts: number; provider_subscription_id: string; provider: string }>(
     `select r.id, r.subscription_id, r.attempts, s.provider_subscription_id, s.provider
        from lastro.payment_reviews r join lastro.subscriptions s on s.id = r.subscription_id
@@ -234,7 +239,8 @@ export async function processRenewalCancellations(db: Db, provider: PaymentProvi
   let done = 0;
   let failed = 0;
   for (const t of tasks) {
-    if (t.provider !== provider.id) continue;
+    const provider = resolve(providers, t.provider);
+    if (!provider?.cancelSubscription || t.provider !== provider.id) continue;
     const r = await provider.cancelSubscription(t.provider_subscription_id).catch(() => ({ ok: false }));
     if (r.ok) {
       await db.tx(async (tx) => {
@@ -256,12 +262,13 @@ export async function processRenewalCancellations(db: Db, provider: PaymentProvi
 }
 
 /** Cancels the renewal of the user's own active subscription (profile → "Cancelar renovação"). */
-export async function requestRenewalCancellation(db: Db, userId: string, provider: PaymentProvider | null): Promise<{ ok: true } | { ok: false; error: "no_subscription" | "not_supported" | "gateway_error" }> {
+export async function requestRenewalCancellation(db: Db, userId: string, providers: ProviderRef): Promise<{ ok: true } | { ok: false; error: "no_subscription" | "not_supported" | "gateway_error" }> {
   const [sub] = await db.query<{ id: string; provider: string; provider_subscription_id: string }>(
     `select id, provider, provider_subscription_id from lastro.subscriptions where user_id = $1 and status in ('active', 'past_due') and not cancel_at_period_end order by created_at desc limit 1`,
     [userId],
   );
   if (!sub) return { ok: false, error: "no_subscription" };
+  const provider = resolve(providers, sub.provider);
   if (!provider?.cancelSubscription || provider.id !== sub.provider) return { ok: false, error: "not_supported" };
   const r = await provider.cancelSubscription(sub.provider_subscription_id).catch(() => ({ ok: false }));
   if (!r.ok) return { ok: false, error: "gateway_error" };
