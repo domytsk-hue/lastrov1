@@ -132,6 +132,12 @@ export async function handlePaymentEvent(db: Db, config: CentralisConfig, provid
     );
     if (!fresh.length) return "duplicate";
 
+    // Gateways that don't echo our order id (Disrupty): the charge id it gave at checkout finds it.
+    if (!ev.orderId && ev.transactionId && (ev.type === "payment.approved" || ev.type === "payment.failed" || ev.type === "payment.expired")) {
+      const [o] = await tx.query<{ id: string }>(`select id from lastro.orders where provider = $1 and provider_payment_id = $2`, [provider, ev.transactionId]);
+      if (o) ev = { ...ev, orderId: o.id };
+    }
+
     switch (ev.type) {
       case "payment.pending":
         return "ignored"; // a pending payment is not a purchase
@@ -206,7 +212,7 @@ async function approveInitial(db: Db, config: CentralisConfig, provider: string,
   if (order.status === "approved") {
     const [same] = await db.query(`select 1 from lastro.charges where provider = $1 and gateway_transaction_id = $2`, [provider, ev.transactionId]);
     if (same) return "duplicate";
-    // A new paid month of an approved monthly order: the gateway renewed it (e.g. a Kirvano subscription).
+    // A new paid month of an approved monthly order: the gateway renewed it (a gateway-managed subscription).
     if (order.plan_id === "mensal") {
       if (!amountMatches(ev, order)) {
         await openReview(db, { kind: "amount_mismatch", userId: order.user_id, orderId: order.id, provider, transactionId: ev.transactionId, detail: { expected_minor: order.amount_minor, received_minor: ev.amountMinor ?? null, renewal: true } });
@@ -283,7 +289,7 @@ async function approveInitial(db: Db, config: CentralisConfig, provider: string,
       const [open] = await db.query(`select 1 from lastro.payment_reviews where subscription_id = $1 and kind = 'cancel_renewal' and status = 'open'`, [s.id]);
       if (!open) await openReview(db, { kind: "cancel_renewal", userId: order.user_id, orderId: order.id, subscriptionId: s.id, provider, retry: true, detail: { reason: "upgrade_to_lifetime" } });
     }
-    // The gateway renews the monthly plan by itself and has no API to stop it (Kirvano): a person
+    // The gateway renews the monthly plan by itself and has no API to stop it: a person
     // cancels it there. Until resolved, the profile says the cancellation is in progress.
     if (ev.gatewayRenewsMonthly) {
       const monthly = await db.query<{ id: string }>(
@@ -415,7 +421,7 @@ async function refund(db: Db, config: CentralisConfig, provider: string, ev: Pay
   const txId = ev.refundedTransactionId ?? ev.transactionId;
   if (!txId) return "ignored";
   // The charge refunded: the transaction itself or, when the gateway keys subscription cycles as
-  // "<sale>:<cycle>" (Kirvano), the most recent paid cycle of that sale.
+  // "<sale>:<cycle>" (a gateway renewing under one sale id), the most recent paid cycle of that sale.
   const [known] = await db.query<{ id: string; status: string }>(
     `select id, status from lastro.charges
       where provider = $1 and (gateway_transaction_id = $2 or left(gateway_transaction_id, length($2) + 1) = $2 || ':')

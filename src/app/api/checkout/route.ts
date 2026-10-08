@@ -27,7 +27,7 @@ export async function GET() {
       recurring: provider?.supportsSubscriptions ?? false,
       hosted: provider?.hostedCheckout ?? false,
       autoRenews: provider?.autoRenews ?? false,
-      name: provider?.id === "kirvano" ? "Kirvano" : null,
+      name: provider?.id === "disrupty" ? "Disrupty" : null,
       fields: provider ? billingFieldsOf(provider) : [],
     },
   });
@@ -35,7 +35,7 @@ export async function GET() {
 
 /**
  * POST /api/checkout { plan_id, method, name, cpf, phone, email?, idempotency_key }
- * (with a hosted checkout such as Kirvano: just { plan_id, idempotency_key })
+ * (with a hosted checkout: just { plan_id, idempotency_key })
  * Opens (or finds) the charge for the signed-in user. Only creates a PENDING order: access
  * is released exclusively by the gateway's verified confirmation. Any amount the browser
  * sends is ignored — the price comes from the plan catalog.
@@ -48,7 +48,7 @@ export async function POST(req: Request) {
   if (!provider) return json({ ok: false, error: "payments_unavailable" }, 503);
 
   const body = await readJson(req);
-  // Only the fields this gateway needs from Lastro (Kirvano: what pre-fills its page).
+  // Only the fields this gateway needs from Lastro (a hosted page: what pre-fills it).
   const fields = billingFieldsOf(provider);
   const billing = fields.length ? validateBilling({ name: body.name, cpf: body.cpf, phone: body.phone, email: body.email }, user.email, fields) : null;
   if (billing && !billing.ok) return json({ ok: false, error: "invalid_billing", fields: billing.errors }, 422);

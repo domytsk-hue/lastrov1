@@ -58,7 +58,7 @@ export interface PaymentEvent {
    */
   customerEmail?: string;
   /**
-   * The gateway renews monthly plans by itself and Lastro can't stop that by API (Kirvano):
+   * The gateway renews monthly plans by itself and Lastro can't stop that by API:
    * after an upgrade, a person must cancel the old monthly subscription at the gateway.
    */
   gatewayRenewsMonthly?: boolean;

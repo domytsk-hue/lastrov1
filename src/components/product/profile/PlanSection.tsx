@@ -33,7 +33,7 @@ export function PlanSection() {
         if (!alive) return;
         setAccess(d.access);
         setRecurring(d.payments.recurring);
-        setGatewayRenews(d.payments.autoRenews ? (d.payments.provider === "kirvano" ? "Kirvano" : "meio de pagamento") : null);
+        setGatewayRenews(d.payments.autoRenews ? "meio de pagamento" : null);
       })
       .catch(() => {});
     return () => {

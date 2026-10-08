@@ -168,9 +168,10 @@ produce one purchase. Approving the order, granting access, mirroring the plan a
 `purchase` happen in one database transaction.
 
 Gateways are adapters (`src/server/payments/provider.ts`), registered in `registry.ts`:
-`kirvano` in production (hosted checkout, token-authenticated webhooks) and `sandbox`, which
-exercises the whole flow in isolated environments only. For Kirvano sales, Centralis receives
-`payment_method: "kirvano"` and the amount Kirvano confirmed. Prices come from the
+`disrupty` in production (Pix on Lastro's own checkout; every webhook re-checked with
+Disrupty's API) and `sandbox`, which exercises the whole flow in isolated environments only.
+For Disrupty sales, Centralis receives `payment_method: "disrupty"` and the amount Disrupty
+confirmed. Prices come from the
 plan catalog (`src/config/plans.ts`), never from the browser. Checkout, plan access, the
 paywall switch and the gateway checklist are in [`payments.md`](payments.md).
 

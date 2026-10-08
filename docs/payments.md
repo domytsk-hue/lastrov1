@@ -1,6 +1,6 @@
 # Checkout, plans and access
 
-How a Lastro account goes from sign-up to paid access, and how Kirvano, the payment
+How a Lastro account goes from sign-up to paid access, and how Disrupty, the payment
 gateway, plugs in. The rule behind all of it: **only a verified confirmation from the gateway turns
 money into access.** No page, browser call, URL or button can.
 
@@ -194,7 +194,7 @@ Nothing new is invented; the existing outbox, events and attribution are reused.
 1. Apply `supabase/migrations/20261008000000_checkout_access.sql` on Supabase. It is
    additive and safe to run twice.
 2. Deploy this code with `LASTRO_PAYWALL` **unset**. Nothing changes for users.
-3. Configure Kirvano and validate it with a real sale ("Setting it up" below).
+3. Configure Disrupty and validate it with a real sale ("Setting it up" below).
 4. Decide how to treat **existing accounts** (see pending decisions) and create their grants
    if any.
 5. Set `LASTRO_PAYWALL=on` and redeploy.
@@ -210,132 +210,85 @@ insert into lastro.access_entitlements (id, user_id, source, starts_at, ends_at,
 values (gen_random_uuid(), '<user id>', 'admin', now(), null, '<why>');
 ```
 
-## Kirvano (the production gateway)
+## Disrupty (the production gateway)
 
-Kirvano is a **hosted checkout**: the payment itself (Pix, card) happens on the offer's
-Kirvano page.
+Disrupty is used **only as the gateway**: the buyer never leaves Lastro. The checkout page is
+Lastro's own; Lastro asks Disrupty for a Pix charge and shows the QR code and the
+copy-and-paste code on its own page.
 
-**Lastro's own checkout does everything before that:**
-- the buyer picks the plan;
-- the buyer types name and phone (the e-mail comes from the account).
-
-**Kirvano's page then arrives pre-filled.** It uses Kirvano's documented `customer.*` URL
-fields, so the buyer only enters the CPF, chooses Pix or card and confirms.
-
-**What the link to Kirvano carries:**
-- `src=lastro-<order id>`, which comes back in every webhook as `utm.src`;
-- `customer.name`, `customer.email` and `customer.phone`, with spaces written as `%20`, as
-  Kirvano documents.
-
-**About the CPF:**
-- The CPF is **not** put in the link by default. A URL stays in browser history and can reach
-  the tracking pixels installed on the offer page.
-- `KIRVANO_PREFILL_CPF=true` adds it (`customer.document`). The checkout then also asks for
-  the CPF.
-- The order saves the link **without** these personal fields.
-
-Adapter: `src/server/payments/kirvano.ts`.
+Adapter: `src/server/payments/disrupty.ts`.
 
 ```
-/checkout (plan, name, phone) → order (pending)
-  → https://pay.kirvano.com/<offer>?src=lastro-<order id>&customer.name=…&customer.email=…&customer.phone=…
-Kirvano webhook ──(token)──► /api/payments/webhook/kirvano → SALE_APPROVED → checks → access
+/checkout (Lastro) ──POST /api/checkout──► Lastro server ──POST /api/sales──► Disrupty
+                                            ◄── { id, status: PENDENTE, payment.pix.key }
+page shows QR + "copia e cola", polls /api/checkout/orders/<id>
+Disrupty webhook ──► /api/payments/webhook/disrupty ──GET /api/sales/<id>──► Disrupty → checks → access
 ```
 
-- **Authenticity.** Kirvano has no public API to create or query charges, so its webhook is
-  the only confirmation.
-  - A webhook is accepted only with the shared token, compared in constant time. The token can
-    come in the `X-Kirvano-Token` header (or `security-token` / `x-webhook-token`), or as
-    `?token=` in the webhook URL.
-  - Configure both in Kirvano, so whichever way Kirvano sends it, it works.
-- **Matching the order.** Kirvano echoes our `src` back as `utm.src`.
-  - If that is lost, the buyer's e-mail on Kirvano's page is matched, in memory only, to the
-    account's open order (or its paid monthly order, for a renewal).
-  - Any other e-mail is no one's purchase. It goes to review as `unknown_order`.
-- **Checks before access.** The sale must be `status: APPROVED`, of the plan's **offer id**,
-  with `total_price` equal to the plan's price. That rules out an order bump, a coupon or
-  another product.
-  - Anything else goes to review, with no access.
-  - Kirvano's `"R$ 99,90"` strings are parsed exactly to centavos.
-  - Its dates (`YYYY-MM-DD HH:mm:ss`, no zone) are read as Brasília time.
-- **Event mapping.** Names are Kirvano's published examples. `status` is read too, so a
-  renamed refund still revokes.
-  - A subscription sale comes as `type: "RECURRING"` with
-    `plan.charge_frequency` / `plan.next_charge_date`. The paid month runs until
-    `next_charge_date`.
-  - A frequency other than `MONTHLY` is not the Mensal plan, so it goes to review.
+- **Keys.** `X-Api-Public-Key` and `X-Api-Private-Key` go on every call, from the server only.
+  The private key never reaches a browser, a log or Centralis.
+- **Creating the charge.** `POST /api/sales` with the plan's offer id, the plan's price in
+  reais (from the catalog, never from the browser), `paymentMethod: "PIX"` and the buyer's
+  name and e-mail. The order id goes as `Idempotency-Key`, so a retry doesn't open a second
+  charge. The sale id Disrupty answers is stored on the order (`provider_payment_id`).
+- **The QR code** is drawn by Lastro from Disrupty's own copy-and-paste code (same payload),
+  so the page loads nothing from third parties.
+- **Authenticity — the webhook is never trusted for what it says.** Lastro only takes the
+  sale id from it and asks Disrupty itself (`GET /api/sales/<id>`, authenticated with the
+  keys) what happened. Status and amount come from that answer, and the answer must be about
+  the same sale. A forged webhook can at most make Lastro double-check a real sale. This does
+  not depend on Disrupty's signature header (whose format wasn't in the documentation
+  received). Optionally, `DISRUPTY_WEBHOOK_TOKEN` is required as `?token=` on the webhook URL,
+  to turn noise away before any call.
+- **Matching the order.** By the sale id stored at checkout.
+- **Amount.** The confirmed amount must equal the plan's price; otherwise review, no access.
+- **Status mapping** (Portuguese and English spellings):
 
-  | Kirvano | Lastro |
+  | Disrupty status | Lastro |
   |---|---|
-  | `SALE_APPROVED`, `SUBSCRIPTION_RENEWED` (status `APPROVED`) | payment confirmed: the first one gives access, each later one on a monthly order adds a month |
-  | `PIX_GENERATED`, `ABANDONED_CART`, `BANK_SLIP_GENERATED` | nothing (not a purchase) |
-  | `PIX_EXPIRED`, `BANK_SLIP_EXPIRED` | order expired |
-  | `SALE_REFUSED` / status `REFUSED` | order failed |
-  | `SALE_REFUNDED` / status `REFUNDED` | refund: that charge's access revoked |
-  | `SALE_CHARGEBACK` / status `CHARGEBACK` | chargeback: same |
-  | `SUBSCRIPTION_CANCELED` / `_EXPIRED` / `_OVERDUE` | nothing: the paid month simply ends |
-  | anything else | `unhandled_event` review (event name only) |
+  | `PENDENTE`, `AGUARDANDO_PAGAMENTO`, `PROCESSANDO` | pending (nothing released) |
+  | `PAGO`, `APROVADO`, `CONFIRMADO` (`PAID`, `APPROVED`, `COMPLETED`) | `payment.approved` |
+  | `RECUSADO`, `FALHOU`, `CANCELADO` | `payment.failed` |
+  | `EXPIRADO` | `payment.expired` |
+  | `ESTORNADO`, `REEMBOLSADO` / `CHARGEBACK`, `MED` | `payment.refunded` (refund / chargeback) |
+  | anything else | `unhandled` → a person looks at it, never a guessed approval |
 
-- **Duplicates.** Kirvano sends no event id, so `<event>:<sale_id>` deduplicates retries, and
-  `sale_id` is the transaction (one charge per sale, ever).
-- **Monthly.** With `KIRVANO_MENSAL_RECORRENTE=true`, the Mensal offer is a Kirvano
-  subscription:
-  - each month Kirvano charges, its approved sale adds a month (`kind: renewal`, the original
-    affiliate);
-  - Lastro can't cancel it by API, so the profile says Kirvano renews it;
-  - **after an upgrade to vitalício**, a `cancel_renewal` review (manual) asks a person to
-    cancel the old subscription in Kirvano. Until it is resolved, the profile says the
-    cancellation is in progress.
-  
-  A month Kirvano charges in the meantime is kept and flagged (`duplicate_purchase`); the
-  lifetime is never touched.
-- **Privacy.** The webhook carries the buyer's CPF and phone. They are never stored or
-  forwarded: no payload is saved, and reviews keep only ids, amounts and event names.
+- **Without a webhook.** The checkout page's "check again" asks Disrupty the same way, so a
+  lost webhook doesn't keep a paid buyer waiting. Webhook and page never count a sale twice.
+- **Methods.** Pix only. Card stays off until Disrupty's card schema / tokenization is known:
+  card data must never pass through Lastro's server.
+- **Monthly.** No subscriptions through Disrupty: Mensal is a Pix payment that gives one month.
+  When the month ends, the account buys another month (or upgrades to Vitalício at any time).
+- **Privacy.** Lastro sends Disrupty the buyer's name and e-mail only. No CPF is stored.
 
 ### Setting it up (once)
 
-1. **In Kirvano**, create one product "Lastro" with two offers.
-   - **Vitalício:** R$ 99,90, single payment.
-   - **Mensal:** R$ 19,90, either a subscription (then set `KIRVANO_MENSAL_RECORRENTE=true`) or
-     a single payment that gives one month.
-   - No order bumps on these offers: a different total goes to review.
-2. **Copy each offer's** checkout link and offer id.
-3. **Pick the redirect.** As the after-purchase redirect of both offers, use
-   `https://<site>/checkout`. The page finds the open order and waits for the confirmation.
-4. **In Kirvano → Integrações → Webhooks**, create a webhook:
-   - **URL:** `https://<site>/api/payments/webhook/kirvano?token=<KIRVANO_WEBHOOK_TOKEN>`
-   - **Token:** the same value
-   - **Product:** Lastro
-   - **Events:** all purchase, Pix, refund, chargeback and subscription events.
-5. **On Vercel**, set:
-   - `PAYMENT_PROVIDER=kirvano`;
-   - the `KIRVANO_*` variables (see `.env.example`).
-6. **Make one real low-value test purchase.** Then check that:
-   - Kirvano's "Ver logs" shows `200`;
-   - the order is `approved` in `lastro.orders`;
-   - there are no open `unhandled_event` reviews.
-   
-   If a refund is tested, check that the access is revoked.
-7. **Only then** turn on `LASTRO_PAYWALL=on`.
+1. **In Disrupty**, create the two offers (Mensal R$ 19,90 and Vitalício R$ 99,90) and note
+   each offer id.
+2. **Create the API keys** (public `dsrp_pub_…` and private `dsrp_priv_…`).
+3. **On Vercel**, set `PAYMENT_PROVIDER=disrupty` and the `DISRUPTY_*` variables
+   (see `.env.example`).
+4. **Register the webhook** (events `transaction.paid` and `transaction.failed`):
+   - URL `https://<site>/api/payments/webhook/disrupty` (plus `?token=<DISRUPTY_WEBHOOK_TOKEN>`
+     if that variable is set);
+   - via `POST https://api.disruptybr.app/api/webhooks` with `{ "url": "…", "enabled": true }`
+     (as in Disrupty's documentation), or in its dashboard.
+5. **Make one real low-value test purchase** and check that the order is `approved` in
+   `lastro.orders` and no `unhandled_event` review is open.
+6. **Only then** turn on `LASTRO_PAYWALL=on`.
 
-### What could not be confirmed from public documentation
+### To confirm with Disrupty
 
-These are worth confirming on the first real sale (in "Ver logs"):
-- The published examples confirm these events: `SALE_APPROVED` (one-time and recurring),
-  `SUBSCRIPTION_RENEWED`, `SUBSCRIPTION_CANCELED`, `SUBSCRIPTION_EXPIRED` ("assinatura
-  atrasada"), `SALE_REFUNDED`, `SALE_REFUSED`, `SALE_CHARGEBACK`, `PIX_GENERATED`,
-  `PIX_EXPIRED`, `BANK_SLIP_GENERATED`, `BANK_SLIP_EXPIRED` and `ABANDONED_CART`.
-- In those examples a renewal carries the **same `sale_id`** as the first sale. So each paid
-  cycle is keyed as `<sale_id>:<next_charge_date>`:
-  - every month counts once, and Kirvano's retries don't;
-  - a refund of that `sale_id` revokes the most recent paid cycle.
-- **The token header name.** Lastro accepts the header and the URL parameter, so either works.
-- **Whether a renewal keeps `utm.src`.** Without it, the account's e-mail finds the order.
-- **Whether a renewal really reuses the `sale_id`.** Both cases are handled.
+Not in the documentation received; the code is built to be safe either way:
+- the full `POST /api/sales` schema (CPF/phone fields, an external reference, Pix expiry);
+- every sale status name (unknown ones go to review);
+- the webhook body format and the signature header (not relied upon);
+- refunds and chargebacks (how they appear);
+- card: tokenization in the browser, so card data never touches Lastro.
 
 ## Without a gateway
 
-- `PAYMENT_PROVIDER` empty (or Kirvano not fully configured) → `POST /api/checkout` answers
+- `PAYMENT_PROVIDER` empty (or Disrupty not fully configured) → `POST /api/checkout` answers
   `503 payments_unavailable` before storing anything: no order, no billing data, no event.
 - The checkout shows the plans, explains that payments aren't available yet, disables the pay
   button and keeps "Pagar depois".
@@ -371,12 +324,11 @@ These are worth confirming on the first real sale (in "Ver logs"):
 | Variable | Where | Meaning |
 |---|---|---|
 | `LASTRO_PAYWALL` | server | `on` enforces plan access; unset = today's behavior |
-| `PAYMENT_PROVIDER` | server | `kirvano` in production; empty = payments unavailable |
-| `KIRVANO_WEBHOOK_TOKEN` | server | secret shared with the Kirvano webhook (≥ 16 chars) |
-| `KIRVANO_CHECKOUT_URL_MENSAL` / `_VITALICIO` | server | each offer's payment page (https) |
-| `KIRVANO_OFFER_ID_MENSAL` / `_VITALICIO` | server | offer ids; sales of anything else never release access |
-| `KIRVANO_MENSAL_RECORRENTE` | server | `true` when Mensal is a Kirvano subscription |
-| `KIRVANO_PREFILL_CPF` | server | `true` also asks the CPF on Lastro's checkout and pre-fills it on Kirvano (default: off) |
+| `PAYMENT_PROVIDER` | server | `disrupty` in production; empty = payments unavailable |
+| `DISRUPTY_PUBLIC_KEY` / `DISRUPTY_PRIVATE_KEY` | server | API keys (`dsrp_pub_…` / `dsrp_priv_…`) |
+| `DISRUPTY_OFFER_ID_MENSAL` / `_VITALICIO` | server | Disrupty offer ids (numbers) |
+| `DISRUPTY_WEBHOOK_TOKEN` | server | optional, ≥ 16 chars, required as `?token=` on the webhook URL |
+| `DISRUPTY_API_URL` | server | optional, default `https://api.disruptybr.app` |
 | `PAYMENT_SANDBOX_SECRET` | dev/test only | sandbox webhook HMAC secret |
 | `CRON_SECRET` | server | the scheduled flush also runs plan expiry and renewal cancellations |
 

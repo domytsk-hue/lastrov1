@@ -38,6 +38,8 @@ alter table lastro.orders add constraint orders_status_check
 create unique index if not exists orders_user_idempotency_idx on lastro.orders (user_id, idempotency_key) where idempotency_key is not null;
 -- Two tabs can't open two charges: at most one pending order per user.
 create unique index if not exists orders_one_pending_per_user_idx on lastro.orders (user_id) where status = 'pending';
+-- Gateways that don't echo our order id (Disrupty) are matched by the charge id they returned.
+create index if not exists orders_provider_payment_idx on lastro.orders (provider, provider_payment_id) where provider_payment_id is not null;
 
 -- ---------------------------------------------------------------------------------------
 -- Subscriptions (only when a gateway supports recurring charges)

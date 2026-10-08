@@ -129,8 +129,10 @@ export function CheckoutScreen({ initialPlan, orderId }: { initialPlan: PlanId |
   const accountEmail = info?.account.email ?? null;
   const hosted = info?.payments.hosted ?? false;
   const gatewayName = info?.payments.name ?? "o meio de pagamento";
-  // The billing fields this gateway needs from Lastro (all four, or Kirvano's pre-fill set).
+  // The billing fields this gateway needs from Lastro (all four by default).
   const fields: Fields[] = info?.payments.fields ?? [];
+  // Only the methods this gateway takes (Disrupty: Pix for now).
+  const methods: Method[] = info?.payments.methods.length ? info.payments.methods : ["pix", "card"];
 
   const errors: Record<Fields, string | null> = useMemo(() => {
     const r = (x: { ok: boolean; error?: string }) => (x.ok ? null : (x as { error: string }).error);
@@ -210,7 +212,7 @@ export function CheckoutScreen({ initialPlan, orderId }: { initialPlan: PlanId |
       const { status, data } = await getJson<{ ok: boolean; error?: string; fields?: Partial<Record<Fields, string>>; order_id?: string; instructions?: Instructions }>("/api/checkout", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        // Only the fields this gateway needs (Kirvano: name, e-mail, phone to pre-fill its page).
+        // Only the fields this gateway needs.
         body: JSON.stringify({
           plan_id: plan,
           idempotency_key: key.current,
@@ -363,16 +365,15 @@ export function CheckoutScreen({ initialPlan, orderId }: { initialPlan: PlanId |
                     {!hosted && (
                     <div>
                       <p className="eyebrow mb-3 px-1 text-ink-500">Forma de pagamento</p>
-                      <Segmented
-                        label="Forma de pagamento"
-                        value={method}
-                        onChange={(m) => setMethod(m)}
-                        options={[
-                          { value: "pix", label: "Pix" },
-                          { value: "card", label: "Cartão" },
-                        ]}
-                      />
-                      <p className="mt-3 flex items-start gap-2 px-1 text-[14px] leading-relaxed text-ink-500">
+                      {methods.length > 1 && (
+                        <Segmented
+                          label="Forma de pagamento"
+                          value={method}
+                          onChange={(m) => setMethod(m)}
+                          options={methods.map((m) => ({ value: m, label: m === "pix" ? "Pix" : "Cartão" }))}
+                        />
+                      )}
+                      <p className={`${methods.length > 1 ? "mt-3" : ""} flex items-start gap-2 px-1 text-[14px] leading-relaxed text-ink-500`}>
                         {method === "pix" ? <QrCode className="mt-0.5 size-4 shrink-0" aria-hidden /> : <CreditCard className="mt-0.5 size-4 shrink-0" aria-hidden />}
                         {method === "pix"
                           ? "Você recebe um código Pix para pagar no app do seu banco. O acesso é liberado quando o pagamento é confirmado."

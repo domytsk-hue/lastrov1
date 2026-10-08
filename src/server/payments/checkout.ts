@@ -98,7 +98,7 @@ export async function createOrder(
 ): Promise<{ ok: true; order: OrderRow; plan: Plan; reused: boolean } | { ok: false; error: CheckoutError }> {
   const plan = await getPlan(db, input.planId);
   if (!plan) return { ok: false, error: "plan_not_found" };
-  // A hosted checkout (Kirvano) lets the buyer choose Pix or card on its own page.
+  // A hosted checkout lets the buyer choose Pix or card on its own page.
   const method: PaymentMethod | null = input.provider.hostedCheckout ? null : (input.method as PaymentMethod);
   if (method !== null && !input.provider.methods.includes(method)) return { ok: false, error: "invalid_method" };
   const key = IDEMPOTENCY_RE.test(input.idempotencyKey) ? input.idempotencyKey : null;
@@ -192,7 +192,9 @@ export async function orderStatus(db: Db, config: CentralisConfig, userId: strin
   let [o] = await db.query<OrderRow>(`select * from lastro.orders where id = $1 and user_id = $2`, [orderId, userId]);
   if (!o) return null;
   if (o.status === "pending" && provider && provider.id === o.provider && provider.getPayment && o.provider_payment_id) {
-    const ev = await provider.getPayment(o.provider_payment_id).catch(() => null);
+    const answer = await provider.getPayment(o.provider_payment_id).catch(() => null);
+    // The answer must be about this order: our id echoed back, or (gateways that don't echo it) the charge id we asked for.
+    const ev = answer && !answer.orderId && answer.transactionId === o.provider_payment_id ? { ...answer, orderId: o.id } : answer;
     if (ev && ev.orderId === o.id && ev.type !== "payment.pending") {
       // The query answer is keyed by the transaction, so a later webhook for it is a no-op.
       const result: HandleResult = await handlePaymentEvent(db, config, o.provider, { ...ev, providerEventId: `query:${ev.type}:${ev.transactionId ?? o.id}` }).catch(() => "ignored" as const);

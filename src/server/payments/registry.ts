@@ -1,12 +1,12 @@
 import "server-only";
 import type { PaymentProvider } from "./provider.ts";
 import { createSandboxProvider, type SandboxState } from "./sandbox.ts";
-import { createKirvanoProvider, kirvanoConfig } from "./kirvano.ts";
+import { createDisruptyProvider, disruptyConfig } from "./disrupty.ts";
 
 /**
- * Which gateways exist in this deployment: "kirvano" (production, hosted checkout) and
- * "sandbox" (isolated tests). Another gateway is one more adapter registered here. With
- * PAYMENT_PROVIDER empty, or Kirvano not fully configured, checkout answers "payments unavailable".
+ * Which gateways exist in this deployment: "disrupty" (production, Pix on Lastro's own
+ * checkout) and "sandbox" (isolated tests). Another gateway is one more adapter registered here.
+ * With PAYMENT_PROVIDER empty, or Disrupty not fully configured, checkout answers "payments unavailable".
  */
 
 /**
@@ -22,10 +22,10 @@ export function sandboxAllowed(env: NodeJS.ProcessEnv = process.env): boolean {
 const g = globalThis as unknown as { __lastroSandbox?: SandboxState };
 
 export function getPaymentProvider(id: string | null | undefined, env: NodeJS.ProcessEnv = process.env): PaymentProvider | null {
-  if (id === "kirvano") {
-    // Only when fully configured (webhook token + both offer pages); otherwise "unavailable".
-    const config = kirvanoConfig(env);
-    return config ? createKirvanoProvider(config) : null;
+  if (id === "disrupty") {
+    // Only when fully configured (both keys + both offer ids); otherwise "unavailable".
+    const config = disruptyConfig(env);
+    return config ? createDisruptyProvider(config) : null;
   }
   if (id === "sandbox") {
     if (!sandboxAllowed(env)) return null;
