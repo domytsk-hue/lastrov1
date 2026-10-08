@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, LayoutGroup, motion } from "framer-motion";
-import { CalendarDays, ChevronDown, Keyboard, ShieldCheck, Sparkles, Target, Trash2, TrendingUp, Wallet } from "lucide-react";
+import { CalendarDays, ChevronDown, ShieldCheck, Target, Trash2, TrendingUp, Wallet } from "lucide-react";
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { EXPENSE_CATEGORIES, INCOME_CATEGORIES, getCategory } from "@/product/data/categories";
 import { evaluate, isArithmetic } from "@/product/domain/calculator";
@@ -115,14 +115,7 @@ function ComposerBody() {
   const [destination, setDestination] = useState<Destination>(initialDestination);
   const [investmentClass, setInvestmentClass] = useState<InvestmentClass>(edit?.investmentClass ?? "renda-fixa");
   const [showMore, setShowMore] = useState(false);
-  const [keyboardMode, setKeyboardMode] = useState(false);
-  const [touchDevice, setTouchDevice] = useState(false);
   const [saving, setSaving] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    setTouchDevice(window.matchMedia("(pointer: coarse)").matches);
-  }, []);
 
   /* ---------- interpretation ---------- */
   const parsed = useMemo(() => (text && !isArithmetic(text) ? parseQuickEntry(text, today) : null), [text, today]);
@@ -234,6 +227,28 @@ function ComposerBody() {
     window.setTimeout(commit, edit ? 0 : 520);
   }, [saving, canSave, finalAmount, type, effectiveCategory, description, investmentClass, destinationLabel, accountId, date, recurring, tags, notes, installments, destination, state, edit, dispatch, today, closeComposer, toast, emitFlow]);
 
+  // The calculator has no text field (so phones never open their own keyboard): on a computer
+  // the physical keyboard drives the same keys. Typing inside a details field is left alone.
+  useEffect(() => {
+    const KEYS: Record<string, KeypadKey> = { ",": ",", ".": ",", "+": "+", "-": "-", "*": "×", x: "×", X: "×", "/": "÷", "%": "%", "=": "=", Backspace: "back", Delete: "clear" };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if ((e.target as HTMLElement | null)?.closest?.("input, textarea, select, [contenteditable=true]")) return;
+      if (e.key === "Enter") {
+        if ((e.target as HTMLElement | null)?.closest?.("button")) return; // a focused button handles its own Enter
+        e.preventDefault();
+        save();
+        return;
+      }
+      const k = /^\d$/.test(e.key) ? (e.key as KeypadKey) : KEYS[e.key];
+      if (!k) return;
+      e.preventDefault();
+      setText((t) => applyKey(t, k));
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [save]);
+
   const remove = () => {
     if (!edit) return;
     dispatch({ type: "transaction/delete", id: edit.id });
@@ -246,18 +261,19 @@ function ComposerBody() {
   const [intPart, decPart] = formatNumber(finalAmount, 2).split(",");
 
   return (
-    <div className="flex flex-col gap-5">
+    // Shorter phones get a tighter calculator so every key stays above the save button.
+    <div className="flex flex-col gap-5 [@media(max-height:780px)]:gap-3 [@media(max-height:700px)]:gap-2!">
       <Segmented label="Tipo de movimentação" value={type} onChange={setType} options={TYPE_OPTIONS} />
 
       {/* Amount — the hero of the sheet */}
       <div className="flex flex-col items-center pt-1 text-center" aria-live="polite">
         <motion.div key={type} initial={{ opacity: 0.4, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={spring.soft} className={cn("flex items-start font-display font-semibold tabular", accent, finalAmount === 0 && "opacity-35")}>
           <span className="mt-[0.5em] mr-2 font-sans text-[22px] font-medium opacity-60">R$</span>
-          <span className="text-[68px] leading-none tracking-[-0.05em]">{intPart}</span>
+          <span className="text-[68px] leading-none tracking-[-0.05em] [@media(max-height:780px)]:text-[52px] [@media(max-height:700px)]:text-[42px]!">{intPart}</span>
           <span className="mt-[0.15em] text-[30px] opacity-50">,{decPart}</span>
         </motion.div>
-        <div className="mt-3 flex min-h-[32px] flex-wrap items-center justify-center gap-2">
-          {calc?.isExpression && <span className="rounded-full bg-white/70 px-3 py-1 text-[15px] font-medium text-ink-700 tabular">{text.replace(/\s+$/, "")}</span>}
+        <div className="mt-3 flex min-h-[32px] flex-wrap items-center justify-center gap-2 [@media(max-height:780px)]:mt-2 [@media(max-height:700px)]:mt-1! [@media(max-height:700px)]:min-h-[22px]!">
+          {calc?.isExpression && <span className="rounded-full bg-white/70 px-3 py-1 text-[15px] font-medium text-ink-700 tabular [@media(max-height:700px)]:py-0.5! [@media(max-height:700px)]:text-[13px]!">{text.replace(/\s+$/, "")}</span>}
           {type === "expense" && splitSuggestion && (
             <button
               type="button"
@@ -270,46 +286,7 @@ function ComposerBody() {
               {!installments && " · parcelar"}
             </button>
           )}
-          {parsed && parsed.inferred.length > 0 && !calc && (
-            <span className="inline-flex items-center gap-1.5 text-[14px] font-medium text-ink-500">
-              <Sparkles className="size-4 text-violet" />
-              {[parsed.amount && formatBRL(parsed.amount), effectiveCategory && getCategory(effectiveCategory).name, formatRelativeDay(date, today).toLowerCase()].filter(Boolean).join(" · ")}
-            </span>
-          )}
         </div>
-      </div>
-
-      {/* Smart field */}
-      <div className="relative">
-        <Sparkles className="pointer-events-none absolute top-1/2 left-4 size-[18px] -translate-y-1/2 text-violet" aria-hidden />
-        <input
-          ref={inputRef}
-          autoFocus={!touchDevice}
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              save();
-            }
-          }}
-          inputMode={touchDevice && !keyboardMode ? "none" : "text"}
-          placeholder={type === "income" ? "3500 salário" : type === "transfer" ? "300 reserva" : "45 almoço · 120+32+48"}
-          aria-label="Valor ou descrição rápida"
-          className={cn(inputClass, "h-14 rounded-full pr-14 pl-12 text-[17px]")}
-        />
-        <button
-          type="button"
-          onClick={() => {
-            setKeyboardMode((m) => !m);
-            window.setTimeout(() => inputRef.current?.focus(), 10);
-          }}
-          className={cn("absolute top-1/2 right-2 grid size-10 -translate-y-1/2 place-items-center rounded-full text-ink-500 lg:hidden", keyboardMode && "bg-midnight text-white")}
-          aria-label={keyboardMode ? "Usar calculadora" : "Digitar texto"}
-          aria-pressed={keyboardMode}
-        >
-          <Keyboard className="size-[18px]" />
-        </button>
       </div>
 
       {/* What it is — chips; the selected highlight morphs between them */}
@@ -363,7 +340,7 @@ function ComposerBody() {
         )}
       </LayoutGroup>
 
-      {(!keyboardMode || !touchDevice) && <Keypad onKey={(k) => setText((t) => applyKey(t, k))} />}
+      <Keypad onKey={(k) => setText((t) => applyKey(t, k))} />
 
       {/* Progressive disclosure */}
       <button type="button" onClick={() => setShowMore((s) => !s)} aria-expanded={showMore} className="flex items-center justify-between rounded-full px-2 py-1 text-[15px] text-ink-700">
@@ -453,7 +430,7 @@ function ComposerBody() {
         )}
       </AnimatePresence>
 
-      <div className="sticky bottom-0 -mx-6 flex gap-2 bg-gradient-to-t from-[#CDE9FF] via-[#CDE9FF]/95 to-transparent px-6 pt-4">
+      <div className="sticky bottom-0 -mx-6 flex gap-2 bg-gradient-to-t from-[#CDE9FF] via-[#CDE9FF]/95 to-transparent px-6 pt-4 [@media(max-height:780px)]:pt-2">
         {edit && (
           <button type="button" onClick={remove} className="grid size-16 shrink-0 place-items-center rounded-full bg-rose/12 text-rose-ink transition-transform active:scale-95" aria-label="Excluir movimentação">
             <Trash2 className="size-5" />
@@ -467,7 +444,7 @@ function ComposerBody() {
           whileTap={{ scale: 0.96 }}
           transition={spring.snappy}
           className={cn(
-            "h-16 flex-1 rounded-full text-[17px] font-semibold shadow-[0_14px_30px_-14px_rgba(7,26,59,0.8)] disabled:opacity-35",
+            "h-16 flex-1 rounded-full text-[17px] font-semibold shadow-[0_14px_30px_-14px_rgba(7,26,59,0.8)] disabled:opacity-35 [@media(max-height:780px)]:h-14",
             type === "expense" ? "bg-mint text-midnight" : "bg-midnight text-white",
           )}
         >
