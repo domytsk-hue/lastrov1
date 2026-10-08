@@ -104,7 +104,11 @@ export function createSimplifyProvider(config: SimplifyConfig, fetchImpl: typeof
       } catch {
         body = {};
       }
-      if (res.status !== 200 && res.status !== 201) throw new Error(`simplify: create deposit answered ${res.status}`);
+      if (res.status !== 200 && res.status !== 201) {
+        // Simplify's message and the names of the fields it refused — never their values.
+        const reason = [str(body.error), str(body.message), ...Object.keys(obj(body.errors))].filter(Boolean).join(" | ").slice(0, 300);
+        throw new Error(`simplify: create deposit answered ${res.status} ${reason}`);
+      }
       const id = str(body.internal_id);
       const copyPaste = str(body.qrcode);
       if (!id || !copyPaste) throw new Error("simplify: deposit without id or Pix code");

@@ -221,3 +221,12 @@ test("mercadopago: an API outage during a webhook throws (Mercado Pago delivers 
   const p = createMercadoPagoProvider(mercadoPagoConfig(env()) as MercadoPagoConfig, (async () => new Response("", { status: 503 })) as typeof fetch);
   await assert.rejects(deliver(p, signed("123")));
 });
+
+test("mercadopago: a refusal is logged with Mercado Pago's reason, never the token", async () => {
+  const p = createMercadoPagoProvider(mercadoPagoConfig(env()) as MercadoPagoConfig, (async () =>
+    new Response(JSON.stringify({ message: "invalid parameters", error: "bad_request", status: 400, cause: [{ code: 2006, description: "Card Token not found" }] }), { status: 400 })) as typeof fetch);
+  const err = await p.createCheckout({ orderId: randomUUID(), plan: { id: "mensal", name: "Mensal", amountMinor: 1990, currency: "BRL", billing: "monthly" }, method: "card", customer: null, card: parseCardInput(CARD), returnUrl: "" }).catch((e: Error) => e);
+  assert.ok(err instanceof Error);
+  assert.match(err.message, /400 bad_request \| invalid parameters \| 2006 Card Token not found/);
+  assert.ok(!err.message.includes(CARD.token));
+});

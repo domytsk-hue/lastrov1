@@ -96,7 +96,10 @@ export async function POST(req: Request) {
     });
     await attachCheckout(db, order.id, result);
     return json({ ok: true, order_id: order.id, status: "pending", instructions: result.instructions, expires_at: result.expiresAt ?? null });
-  } catch {
+  } catch (e) {
+    // For the server log: which gateway, which order and the gateway's own reason (adapters
+    // put no card data, tokens or credentials in their errors).
+    console.error(JSON.stringify({ scope: "checkout", level: "error", message: "gateway refused or unreachable", provider: provider.id, method, order_id: order.id, reason: e instanceof Error ? e.message.slice(0, 400) : "unknown" }));
     // A timeout is not "no payment": the order stays pending and the same key retries it,
     // with the gateway's idempotency key.
     return json({ ok: false, error: "gateway_error", order_id: order.id }, 502);

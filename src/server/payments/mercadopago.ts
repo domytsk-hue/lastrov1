@@ -118,6 +118,15 @@ export function parseCardInput(v: unknown): CheckoutRequest["card"] {
   return { token, paymentMethodId, issuerId };
 }
 
+/**
+ * Why Mercado Pago refused a request, for the server log: its error code, message and causes
+ * (e.g. "2006 Card Token not found"). Never the request, the token or any card data.
+ */
+export function gatewayReason(body: Obj): string {
+  const causes = Array.isArray(body.cause) ? body.cause.map((c) => `${str(obj(c).code) ?? ""} ${str(obj(c).description) ?? ""}`.trim()).filter(Boolean) : [];
+  return [str(body.error), str(body.message), ...causes].filter(Boolean).join(" | ").replace(/\s+/g, " ").slice(0, 300);
+}
+
 /* ------------------------------------ adapter ------------------------------------ */
 
 export function createMercadoPagoProvider(config: MercadoPagoConfig, fetchImpl: typeof fetch = fetch): PaymentProvider {
@@ -179,7 +188,7 @@ export function createMercadoPagoProvider(config: MercadoPagoConfig, fetchImpl: 
       // new card (new token) after a refusal is a new attempt.
       const idempotencyKey = createHash("sha256").update(`${req.orderId}:${req.card.token}`).digest("hex").slice(0, 64);
       const r = await call("/v1/payments", { method: "POST", body: JSON.stringify(payload), headers: { "X-Idempotency-Key": idempotencyKey } });
-      if (r.status !== 200 && r.status !== 201) throw new Error(`mercadopago: create payment answered ${r.status}`);
+      if (r.status !== 200 && r.status !== 201) throw new Error(`mercadopago: create payment answered ${r.status} ${gatewayReason(r.body)}`);
       const id = str(r.body.id);
       if (!id) throw new Error("mercadopago: payment without id");
       // Approved, refused or in analysis: the page asks the server, which asks Mercado Pago.
