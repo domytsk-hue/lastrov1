@@ -15,6 +15,10 @@ export const metadata: Metadata = {
   description: "Lastro torna seu progresso financeiro visível, compreensível e satisfatório.",
   applicationName: "Lastro",
   appleWebApp: { capable: true, title: "Lastro", statusBarStyle: "black-translucent" },
+  // Link previews (WhatsApp, Instagram, X, LinkedIn…) on every page. The banner itself is
+  // src/app/opengraph-image.jpg / twitter-image.jpg (1200×630), picked up by Next.js.
+  openGraph: { type: "website", locale: "pt_BR", siteName: "Lastro", title: "Lastro — Sua vida financeira, finalmente visível", url: "/" },
+  twitter: { card: "summary_large_image", title: "Lastro — Sua vida financeira, finalmente visível" },
 };
 
 export const viewport: Viewport = {
