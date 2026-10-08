@@ -70,6 +70,26 @@ function eventType(event: string, status: string): PaymentEventType {
   return "unhandled";
 }
 
+/**
+ * The notification's fields: JSON (as documented) or form-encoded, flat or nested under
+ * data / deposit / transaction.
+ */
+export function notificationBody(raw: string): Obj | null {
+  let b: Obj | null = null;
+  try {
+    b = obj(JSON.parse(raw));
+  } catch {
+    const form = new URLSearchParams(raw);
+    b = form.size ? Object.fromEntries(form) : null;
+  }
+  if (!b) return null;
+  for (const k of ["data", "deposit", "transaction"]) {
+    const inner = obj(b[k]);
+    if (inner.internal_id !== undefined) return { event: b.event, ...inner };
+  }
+  return b;
+}
+
 /* ------------------------------------ adapter ------------------------------------ */
 
 export function createSimplifyProvider(config: SimplifyConfig, fetchImpl: typeof fetch = fetch): PaymentProvider {
@@ -127,16 +147,13 @@ export function createSimplifyProvider(config: SimplifyConfig, fetchImpl: typeof
     async parseWebhook(rawBody, _headers, url) {
       const orderId = url.searchParams.get("order")?.toLowerCase() ?? "";
       if (!UUID.test(orderId) || !tokenMatches(config.webhookSecret, orderId, url.searchParams.get("token"))) return null;
-      let body: Obj;
-      try {
-        body = obj(JSON.parse(rawBody));
-      } catch {
-        return null;
-      }
+      const body = notificationBody(rawBody);
+      if (!body) return null;
       const event = str(body.event)?.toLowerCase() ?? "";
-      const id = str(body.internal_id);
-      // The notification must be about the order its URL was made for.
-      if (!id || str(body.external_id)?.toLowerCase() !== orderId) return null;
+      const id = str(body.internal_id) ?? str(body.id);
+      // The token already ties this URL to one order; an external_id, when sent, must be it.
+      const ref = str(body.external_id)?.toLowerCase();
+      if (!id || (ref !== undefined && ref !== orderId)) return null;
       if (event.startsWith("withdrawal.")) return [];
       const type = eventType(event, str(body.status)?.toLowerCase() ?? "");
       const at = str(body.timestamp) ? new Date(str(body.timestamp) as string) : new Date();

@@ -149,3 +149,16 @@ test("simplify: wrong amount goes to a person; 'paid' with a non-approved status
   assert.equal(await handlePaymentEvent(db, c, "simplify", cancelled[0]), "applied");
   assert.equal((await orderStatus(db, c, u3, d.orderId, () => p))?.status, "expired");
 });
+
+test("simplify: tolerant of the notification's shape — nested, form-encoded, no external_id — but never of another order", async () => {
+  const db = await freshDb();
+  const c = testConfig();
+  const p = provider(fakeApi().impl);
+  const a = await checkout(db, c, p, await newUser(db, c));
+  const url = (order: string) => new URL(`https://x.test/api/payments/webhook/simplify?order=${order}&token=${webhookToken(WSECRET, order)}`);
+  const nested = await p.parseWebhook(JSON.stringify({ event: "deposit.paid", data: { internal_id: a.txId, external_id: a.orderId, status: "approved", amount: "99.90" } }), new Headers(), url(a.orderId));
+  assert.deepEqual([nested?.[0].type, nested?.[0].amountMinor], ["payment.approved", 9990]);
+  const form = await p.parseWebhook(`event=deposit.paid&internal_id=${a.txId}&status=approved&amount=99.90`, new Headers(), url(a.orderId));
+  assert.deepEqual([form?.[0].type, form?.[0].orderId], ["payment.approved", a.orderId]);
+  assert.equal(await p.parseWebhook(JSON.stringify({ event: "deposit.paid", internal_id: a.txId, external_id: randomUUID(), status: "approved", amount: "99.90" }), new Headers(), url(a.orderId)), null);
+});
