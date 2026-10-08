@@ -245,6 +245,10 @@ Kirvano webhook ──(token)──► /api/payments/webhook/kirvano → SALE_AP
   - Its dates (`YYYY-MM-DD HH:mm:ss`, no zone) are read as Brasília time.
 - **Event mapping.** Names are Kirvano's published examples. `status` is read too, so a
   renamed refund still revokes.
+  - A subscription sale comes as `type: "RECURRING"` with
+    `plan.charge_frequency` / `plan.next_charge_date`. The paid month runs until
+    `next_charge_date`.
+  - A frequency other than `MONTHLY` is not the Mensal plan, so it goes to review.
 
   | Kirvano | Lastro |
   |---|---|
@@ -302,11 +306,11 @@ Kirvano webhook ──(token)──► /api/payments/webhook/kirvano → SALE_AP
 ### What could not be confirmed from public documentation
 
 These are worth confirming on the first real sale (in "Ver logs"):
-- Kirvano's help center was not reachable while this was written. The event examples come
-  from Kirvano's published samples (`SALE_APPROVED`, `PIX_GENERATED`, `PIX_EXPIRED`,
-  `ABANDONED_CART`).
+- The published examples confirm these events: `SALE_APPROVED` (one-time and recurring),
+  `SALE_REFUSED`, `SALE_CHARGEBACK`, `PIX_GENERATED`, `PIX_EXPIRED`, `BANK_SLIP_GENERATED`,
+  `BANK_SLIP_EXPIRED` and `ABANDONED_CART`.
 - **The token header name.** Lastro accepts the header and the URL parameter, so either works.
-- **The exact names of refund, chargeback and subscription events.** Lastro also reads
+- **The exact names of the refund and subscription-cancellation events.** Lastro also reads
   `status`, and anything unknown is kept for review rather than ignored.
 - **Whether a renewal arrives as `SALE_APPROVED`, `SUBSCRIPTION_RENEWED` or both, and whether it
   keeps `utm.src`.** All of these are handled; without `src`, the account's e-mail is used.

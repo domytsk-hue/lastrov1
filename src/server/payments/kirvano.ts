@@ -13,9 +13,10 @@ import type { PaymentEvent, PaymentMethod, PaymentProvider } from "./provider.ts
  * Kirvano has no public API to create or query a charge, so confirmation comes ONLY from its
  * webhook, authenticated by the token configured in Kirvano (header) or in the webhook URL.
  *
- * Event names come from Kirvano's published examples (SALE_APPROVED, PIX_GENERATED,
- * PIX_EXPIRED, ABANDONED_CART). Refund, chargeback, refusal and subscription names are read
- * from both `event` and `status` so a renamed event can't slip through; anything else
+ * Event names come from Kirvano's published examples: SALE_APPROVED (type ONE_TIME or
+ * RECURRING), SALE_REFUSED, SALE_CHARGEBACK, PIX_GENERATED, PIX_EXPIRED, BANK_SLIP_GENERATED,
+ * BANK_SLIP_EXPIRED, ABANDONED_CART. Refunds and subscription changes are not in those
+ * examples, so `status` is read too (a renamed event can't slip through); anything else
  * authentic becomes an "unhandled" event that a person reviews — never a guess.
  */
 
@@ -113,6 +114,15 @@ export function kirvanoEvent(config: KirvanoConfig, body: Obj): PaymentEvent | n
   if (!name || !saleId) return null;
   const payment = obj(body.payment);
   const ref = str(obj(body.utm).src)?.match(ORDER_REF)?.[1];
+  // Subscriptions come as type "RECURRING" with plan { charge_frequency, next_charge_date }:
+  // the paid month runs until Kirvano's next charge. Only a MONTHLY frequency is our Mensal.
+  const recurring = str(body.type)?.toUpperCase() === "RECURRING";
+  const subPlan = obj(body.plan);
+  const frequency = str(subPlan.charge_frequency)?.toUpperCase();
+  const occurredAt = parseKirvanoDate(payment.finished_at) ?? parseKirvanoDate(body.created_at) ?? new Date();
+  const nextCharge = recurring ? parseKirvanoDate(subPlan.next_charge_date) : undefined;
+  let planId = planFromOffers(config, body.products);
+  if (recurring && frequency && frequency !== "MONTHLY") planId = "unknown";
   const base = {
     // Kirvano sends no event id; one sale goes through each event at most once.
     providerEventId: `${name}:${saleId}`,
@@ -120,11 +130,13 @@ export function kirvanoEvent(config: KirvanoConfig, body: Obj): PaymentEvent | n
     transactionId: str(body.sale_id),
     amountMinor: parseBrlToMinor(body.total_price),
     currency: "BRL",
-    planId: planFromOffers(config, body.products),
+    planId,
     method: METHOD[str(body.payment_method)?.toUpperCase() ?? str(payment.method)?.toUpperCase() ?? ""],
     customerEmail: str(obj(body.customer).email)?.toLowerCase(),
     gatewayRenewsMonthly: config.monthlyRecurring,
-    occurredAt: parseKirvanoDate(payment.finished_at) ?? parseKirvanoDate(body.created_at) ?? new Date(),
+    periodStart: nextCharge && nextCharge > occurredAt ? occurredAt : undefined,
+    periodEnd: nextCharge && nextCharge > occurredAt ? nextCharge : undefined,
+    occurredAt,
   } satisfies Omit<PaymentEvent, "type">;
 
   if (APPROVED.has(name)) return status === "APPROVED" ? { ...base, type: "payment.approved" } : { ...base, type: "unhandled", gatewayEventName: `${name}/${status ?? "?"}` };

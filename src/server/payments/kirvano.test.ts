@@ -269,3 +269,35 @@ test("kirvano: an authentic event Lastro doesn't know becomes a review with its 
   assert.equal(r.detail.event, "SUBSCRIPTION_PAUSED_NEW");
   assert.equal(JSON.stringify(r.detail).includes("maria"), false);
 });
+
+test("kirvano: subscription sale (type RECURRING) — the month runs until Kirvano's next_charge_date; a non-monthly plan is not our Mensal", async () => {
+  const db = await freshDb();
+  const c = testConfig();
+  const p = provider({ KIRVANO_MENSAL_RECORRENTE: "true" });
+  const u = await newUser(db, c, "Iris", "iris@exemplo.com");
+  const o = await kirvanoOrder(db, c, u, "mensal");
+  const paid = brt();
+  const next = brt(new Date(Date.now() + 30 * 86_400_000));
+  // Kirvano's published "Compra aprovada (Assinatura)" example, with our offer and price.
+  const body = sale(
+    { type: "RECURRING", plan: { name: "Plano Mensal", charge_frequency: "MONTHLY", next_charge_date: next }, payment: { method: "CREDIT_CARD", brand: "visa", installments: 1, finished_at: paid } },
+    { orderId: o.id, offer: OFFER_MENSAL, price: "R$ 19,90" },
+  );
+  assert.equal(await deliver(db, c, body, p), "applied");
+  assert.equal((await access(db, u)).validUntil, parseKirvanoDate(next)?.toISOString());
+
+  const yearly = await newUser(db, c, "Yuri", "yuri@exemplo.com");
+  const oy = await kirvanoOrder(db, c, yearly, "mensal");
+  const annual = sale({ type: "RECURRING", plan: { name: "Plano Anual", charge_frequency: "ANNUALLY", next_charge_date: next } }, { orderId: oy.id, offer: OFFER_MENSAL, price: "R$ 19,90" });
+  assert.equal(await deliver(db, c, annual, p), "review");
+  assert.equal((await access(db, yearly)).active, false);
+});
+
+test("kirvano: the published refusal, chargeback and bank-slip events", () => {
+  const c = config();
+  const ev = (o: Record<string, unknown>) => kirvanoEvent(c, sale(o));
+  assert.equal(ev({ event: "SALE_REFUSED", status: "REFUSED", payment_method: "CREDIT_CARD" })?.type, "payment.failed");
+  assert.deepEqual([ev({ event: "SALE_CHARGEBACK", status: "CHARGEBACK" })?.type, ev({ event: "SALE_CHARGEBACK", status: "CHARGEBACK" })?.refundReason], ["payment.refunded", "chargeback"]);
+  assert.equal(ev({ event: "BANK_SLIP_GENERATED", status: "PENDING", payment_method: "BANK_SLIP" })?.type, "payment.pending");
+  assert.equal(ev({ event: "BANK_SLIP_EXPIRED", status: "CANCELED", payment_method: "BANK_SLIP" })?.type, "payment.expired");
+});
