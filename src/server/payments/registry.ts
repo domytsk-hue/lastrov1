@@ -2,10 +2,11 @@ import "server-only";
 import type { PaymentMethod, PaymentProvider } from "./provider.ts";
 import { createSandboxProvider, type SandboxState } from "./sandbox.ts";
 import { createMercadoPagoProvider, mercadoPagoConfig } from "./mercadopago.ts";
+import { createSimplifyProvider, simplifyConfig } from "./simplify.ts";
 
 /**
  * Which gateways exist in this deployment. Each payment method has its own gateway:
- *   PAYMENT_PROVIDER_PIX  — Pix  ("simplify", once its adapter exists)
+ *   PAYMENT_PROVIDER_PIX  — Pix  ("simplify")
  *   PAYMENT_PROVIDER_CARD — card ("mercadopago")
  * PAYMENT_PROVIDER sets both at once (e.g. "sandbox" in isolated tests). A method whose gateway
  * is missing or not fully configured simply isn't offered; none at all → "payments unavailable".
@@ -29,6 +30,11 @@ export function getPaymentProvider(id: string | null | undefined, env: NodeJS.Pr
     // Only when fully configured (access token, public key, webhook secret); otherwise unavailable.
     const config = mercadoPagoConfig(env);
     return config ? createMercadoPagoProvider(config) : null;
+  }
+  if (id === "simplify") {
+    // Only when fully configured (client id, client secret, webhook secret); otherwise unavailable.
+    const config = simplifyConfig(env);
+    return config ? createSimplifyProvider(config) : null;
   }
   if (id === "sandbox") {
     if (!sandboxAllowed(env)) return null;

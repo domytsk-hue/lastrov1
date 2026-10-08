@@ -169,7 +169,7 @@ produce one purchase. Approving the order, granting access, mirroring the plan a
 
 Gateways are adapters (`src/server/payments/provider.ts`), registered in `registry.ts`:
 one per payment method — `mercadopago` for card (signed webhooks, every payment re-checked
-with Mercado Pago's API), Simplify for Pix once its adapter exists — and `sandbox`, which
+with Mercado Pago's API) and `simplify` for Pix (per-order webhook token) — and `sandbox`, which
 exercises the whole flow in isolated environments only. Centralis receives the gateway id as
 `payment_method` and the amount the gateway confirmed. Prices come from the
 plan catalog (`src/config/plans.ts`), never from the browser. Checkout, plan access, the

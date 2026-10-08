@@ -90,8 +90,10 @@ test("mercadopago: only configured with access token, public key and webhook sec
 test("registry: Pix and card each have their own gateway; a missing one just isn't offered", () => {
   const both = env({ PAYMENT_PROVIDER_CARD: "mercadopago", PAYMENT_PROVIDER_PIX: "simplify" });
   assert.equal(providerForMethod("card", both)?.id, "mercadopago");
-  assert.equal(providerForMethod("pix", both), null); // Simplify's adapter isn't there yet
+  assert.equal(providerForMethod("pix", both), null); // Simplify chosen but not configured: Pix isn't offered
   assert.deepEqual(checkoutProviders(both).map((o) => o.method), ["card"]);
+  const configured = env({ PAYMENT_PROVIDER_CARD: "mercadopago", PAYMENT_PROVIDER_PIX: "simplify", SIMPLIFY_CLIENT_ID: "id", SIMPLIFY_CLIENT_SECRET: "secret", SIMPLIFY_WEBHOOK_SECRET: "w".repeat(32) });
+  assert.deepEqual(checkoutProviders(configured).map((o) => [o.method, o.provider.id]), [["pix", "simplify"], ["card", "mercadopago"]]);
   // A gateway is never used for a method it doesn't take.
   assert.equal(providerForMethod("pix", env({ PAYMENT_PROVIDER_PIX: "mercadopago" })), null);
   assert.deepEqual(checkoutProviders(env()), []);

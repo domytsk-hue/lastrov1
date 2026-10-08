@@ -215,7 +215,7 @@ values (gen_random_uuid(), '<user id>', 'admin', now(), null, '<why>');
 
 | Method | Gateway | Variable | Adapter |
 |---|---|---|---|
-| Pix | Simplify | `PAYMENT_PROVIDER_PIX=simplify` | **pending** — its API documentation wasn't available yet |
+| Pix | Simplify | `PAYMENT_PROVIDER_PIX=simplify` | `src/server/payments/simplify.ts` |
 | Card | Mercado Pago | `PAYMENT_PROVIDER_CARD=mercadopago` | `src/server/payments/mercadopago.ts` |
 
 `PAYMENT_PROVIDER` sets both at once (e.g. `sandbox` in tests). A method whose gateway is
@@ -275,13 +275,49 @@ Mercado Pago webhook ──(x-signature)──► /api/payments/webhook/mercadop
    from Mercado Pago and check the access is revoked.
 5. **Only then** `LASTRO_PAYWALL=on`.
 
-## Simplify (Pix) — pending
+## Simplify (Pix)
 
-The Pix side is ready on Lastro's side (Pix panel with QR and copy-and-paste, order matched by
-the charge id the gateway returns, webhook re-checked with the gateway's API). The Simplify
-adapter needs its API documentation: base URL, authentication, creating a Pix charge (its
-response with the copy-and-paste code / QR and expiry), querying a charge, the webhook format
-and signature, status names and refunds.
+Documentation: https://simplifybr.gitbook.io/documentacao-simplify. The buyer sees the Pix QR
+code and the copy-and-paste code on Lastro's own page.
+
+```
+/checkout ──POST /api/checkout──► Lastro server ──POST /pix/deposit { amount, payer, external_id: order id,
+                                                   webhookURL: …/webhook/simplify?order=<id>&token=<per-order token> }──► Simplify
+                                  ◄── { internal_id, status: pending, qrcode }
+page shows QR + copy-and-paste, polls /api/checkout/orders/<id>
+Simplify ──POST { event: deposit.paid, internal_id, external_id, status, amount }──► that order's webhook URL → checks → access
+```
+
+- **Credentials.** `client-id` / `client-secret` headers, server-side only.
+- **Authenticity.** Simplify's documentation has **no webhook signature and no endpoint to
+  query a deposit**. So each deposit gets its own webhook URL with a token =
+  HMAC-SHA256(`SIMPLIFY_WEBHOOK_SECRET`, order id). The URL goes only from Lastro's server to
+  Simplify (HTTPS) and is not stored in the order's public instructions. A notification is
+  accepted only with the right token for that order **and** a body whose `external_id` is the
+  same order. Amount, plan and duplicates are then checked like any gateway's.
+- **Do not configure "Webhooks Avançado" in Simplify's panel** for Lastro: those notifications
+  wouldn't carry the per-order token and are refused (`401`). Each deposit already tells
+  Simplify where to notify.
+- **Event mapping:** `deposit.paid` with status `approved` → `payment.approved`;
+  `deposit.cancelled` → `payment.expired`; `deposit.pending` → pending; anything else (or
+  `deposit.paid` with another status) → `unhandled` for a person.
+- **Payer data.** Simplify requires name, e-mail, CPF and phone: the checkout asks all four
+  for Pix. They go to Simplify only; Lastro doesn't store the CPF.
+- **Expiry.** Simplify doesn't document one; Lastro shows/reuses a Pix code for 30 minutes,
+  then a new checkout creates a new deposit. A late payment of an older code is still honored.
+- **Refunds.** No refund event is documented for deposits: a Pix refund done in Simplify must
+  be mirrored by a person (revoke the access).
+- **Without a status query**, a lost notification (Simplify retries 3×, 60 s apart) leaves the
+  order pending: a person can confirm it in Simplify's panel and grant the access.
+
+### Setting it up (once)
+
+1. **Simplify → Integrações → API**: copy the **client-id** and **client-secret**.
+2. **Create `SIMPLIFY_WEBHOOK_SECRET`**: a random text of at least 32 characters, created by
+   you (not from Simplify) — e.g. a password generator with 48 letters and digits.
+3. **On Vercel**: `PAYMENT_PROVIDER_PIX=simplify`, `SIMPLIFY_CLIENT_ID`,
+   `SIMPLIFY_CLIENT_SECRET`, `SIMPLIFY_WEBHOOK_SECRET`.
+4. **One real Pix** of the Mensal plan: the order is `approved`, access is released.
 
 ## Without a gateway
 
@@ -321,7 +357,10 @@ and signature, status names and refunds.
 | Variable | Where | Meaning |
 |---|---|---|
 | `LASTRO_PAYWALL` | server | `on` enforces plan access; unset = today's behavior |
-| `PAYMENT_PROVIDER_PIX` | server | Pix gateway (`simplify`, once its adapter exists) |
+| `PAYMENT_PROVIDER_PIX` | server | Pix gateway: `simplify` |
+| `SIMPLIFY_CLIENT_ID` | server | Simplify client-id |
+| `SIMPLIFY_CLIENT_SECRET` | server | Simplify client-secret (secret) |
+| `SIMPLIFY_WEBHOOK_SECRET` | server | Lastro's own secret (≥ 32 chars) that signs each deposit's webhook URL |
 | `PAYMENT_PROVIDER_CARD` | server | card gateway: `mercadopago` |
 | `PAYMENT_PROVIDER` | server | both methods at once (e.g. `sandbox` in tests) |
 | `MERCADOPAGO_ACCESS_TOKEN` | server | Mercado Pago access token (secret) |
