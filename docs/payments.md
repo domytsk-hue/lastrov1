@@ -307,13 +307,16 @@ Kirvano webhook ──(token)──► /api/payments/webhook/kirvano → SALE_AP
 
 These are worth confirming on the first real sale (in "Ver logs"):
 - The published examples confirm these events: `SALE_APPROVED` (one-time and recurring),
-  `SALE_REFUSED`, `SALE_CHARGEBACK`, `PIX_GENERATED`, `PIX_EXPIRED`, `BANK_SLIP_GENERATED`,
-  `BANK_SLIP_EXPIRED` and `ABANDONED_CART`.
+  `SUBSCRIPTION_RENEWED`, `SUBSCRIPTION_CANCELED`, `SUBSCRIPTION_EXPIRED` ("assinatura
+  atrasada"), `SALE_REFUNDED`, `SALE_REFUSED`, `SALE_CHARGEBACK`, `PIX_GENERATED`,
+  `PIX_EXPIRED`, `BANK_SLIP_GENERATED`, `BANK_SLIP_EXPIRED` and `ABANDONED_CART`.
+- In those examples a renewal carries the **same `sale_id`** as the first sale. So each paid
+  cycle is keyed as `<sale_id>:<next_charge_date>`:
+  - every month counts once, and Kirvano's retries don't;
+  - a refund of that `sale_id` revokes the most recent paid cycle.
 - **The token header name.** Lastro accepts the header and the URL parameter, so either works.
-- **The exact names of the refund and subscription-cancellation events.** Lastro also reads
-  `status`, and anything unknown is kept for review rather than ignored.
-- **Whether a renewal arrives as `SALE_APPROVED`, `SUBSCRIPTION_RENEWED` or both, and whether it
-  keeps `utm.src`.** All of these are handled; without `src`, the account's e-mail is used.
+- **Whether a renewal keeps `utm.src`.** Without it, the account's e-mail finds the order.
+- **Whether a renewal really reuses the `sale_id`.** Both cases are handled.
 
 ## Without a gateway
 

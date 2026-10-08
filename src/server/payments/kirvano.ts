@@ -87,7 +87,7 @@ export const orderRef = (orderId: string) => `lastro-${orderId}`;
 const METHOD: Record<string, PaymentMethod> = { PIX: "pix", CREDIT_CARD: "card" };
 
 /** Event names, by meaning. `status` is checked too, so a renamed event still lands right. */
-/** A paid sale. A subscription renewal is a new sale; if Kirvano sends it under both names, the sale id makes it one charge. */
+/** A paid sale or a paid subscription cycle (SUBSCRIPTION_RENEWED, status APPROVED). */
 const APPROVED = new Set(["SALE_APPROVED", "SUBSCRIPTION_RENEWED"]);
 const PENDING = new Set(["PIX_GENERATED", "BANK_SLIP_GENERATED", "ABANDONED_CART", "SALE_CREATED"]);
 const EXPIRED = new Set(["PIX_EXPIRED", "BANK_SLIP_EXPIRED"]);
@@ -123,11 +123,16 @@ export function kirvanoEvent(config: KirvanoConfig, body: Obj): PaymentEvent | n
   const nextCharge = recurring ? parseKirvanoDate(subPlan.next_charge_date) : undefined;
   let planId = planFromOffers(config, body.products);
   if (recurring && frequency && frequency !== "MONTHLY") planId = "unknown";
+  // A subscription renewal can carry the ORIGINAL sale_id (Kirvano's examples do): each billing
+  // cycle is its own payment, keyed by the sale and the cycle's next charge date.
+  const sale = str(body.sale_id);
+  const cycle = name === "SUBSCRIPTION_RENEWED" ? (str(subPlan.next_charge_date) ?? str(payment.finished_at) ?? str(body.created_at)) : undefined;
+  const transactionId = sale && cycle ? `${sale}:${cycle}` : sale;
   const base = {
-    // Kirvano sends no event id; one sale goes through each event at most once.
-    providerEventId: `${name}:${saleId}`,
+    // Kirvano sends no event id; one payment goes through each event at most once.
+    providerEventId: `${name}:${transactionId ?? saleId}`,
     orderId: ref,
-    transactionId: str(body.sale_id),
+    transactionId,
     amountMinor: parseBrlToMinor(body.total_price),
     currency: "BRL",
     planId,
@@ -140,8 +145,8 @@ export function kirvanoEvent(config: KirvanoConfig, body: Obj): PaymentEvent | n
   } satisfies Omit<PaymentEvent, "type">;
 
   if (APPROVED.has(name)) return status === "APPROVED" ? { ...base, type: "payment.approved" } : { ...base, type: "unhandled", gatewayEventName: `${name}/${status ?? "?"}` };
-  if (CHARGEBACK.has(name) || status === "CHARGEBACK") return { ...base, type: "payment.refunded", refundedTransactionId: base.transactionId, refundReason: "chargeback" };
-  if (REFUNDED.has(name) || status === "REFUNDED") return { ...base, type: "payment.refunded", refundedTransactionId: base.transactionId, refundReason: "refund" };
+  if (CHARGEBACK.has(name) || status === "CHARGEBACK") return { ...base, type: "payment.refunded", refundedTransactionId: sale, refundReason: "chargeback" };
+  if (REFUNDED.has(name) || status === "REFUNDED") return { ...base, type: "payment.refunded", refundedTransactionId: sale, refundReason: "refund" };
   if (REFUSED.has(name) || status === "REFUSED") return { ...base, type: "payment.failed" };
   if (EXPIRED.has(name)) return { ...base, type: "payment.expired" };
   if (PENDING.has(name)) return { ...base, type: "payment.pending" };

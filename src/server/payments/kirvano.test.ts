@@ -301,3 +301,34 @@ test("kirvano: the published refusal, chargeback and bank-slip events", () => {
   assert.equal(ev({ event: "BANK_SLIP_GENERATED", status: "PENDING", payment_method: "BANK_SLIP" })?.type, "payment.pending");
   assert.equal(ev({ event: "BANK_SLIP_EXPIRED", status: "CANCELED", payment_method: "BANK_SLIP" })?.type, "payment.expired");
 });
+
+test("kirvano: renewals that reuse the original sale_id still add a month each; Kirvano's retries don't; a refund hits the latest paid cycle", async () => {
+  const db = await freshDb();
+  const c = testConfig();
+  const p = provider({ KIRVANO_MENSAL_RECORRENTE: "true" });
+  const u = await newUser(db, c, "Rui", "rui@exemplo.com");
+  const o = await kirvanoOrder(db, c, u, "mensal");
+  const SALE = "D2RP8RQ7";
+  const day = 86_400_000;
+  const t0 = Date.now() - 45 * day; // "now" sits in the middle of the second paid month
+  const at = (d: number) => brt(new Date(t0 + d * day));
+  const cycle = (event: string, paid: number, next: number) =>
+    sale(
+      { event, sale_id: SALE, type: "RECURRING", plan: { name: "Plano Mensal", charge_frequency: "MONTHLY", next_charge_date: at(next) }, payment: { method: "CREDIT_CARD", brand: "visa", installments: 1, finished_at: at(paid) }, created_at: at(paid) },
+      { orderId: o.id, offer: OFFER_MENSAL, price: "R$ 19,90" },
+    );
+  assert.equal(await deliver(db, c, cycle("SALE_APPROVED", 0, 30), p), "applied");
+  // Kirvano's published "Assinatura renovada": same sale_id, a new cycle.
+  assert.equal(await deliver(db, c, cycle("SUBSCRIPTION_RENEWED", 30, 60), p), "applied");
+  assert.equal(await deliver(db, c, cycle("SUBSCRIPTION_RENEWED", 30, 60), p), "duplicate"); // Kirvano retrying
+  assert.equal(await deliver(db, c, cycle("SUBSCRIPTION_RENEWED", 60, 90), p), "applied");
+  assert.equal((await access(db, u)).validUntil, parseKirvanoDate(at(90))?.toISOString());
+  assert.equal((await db.query(`select id from lastro.charges`)).length, 3);
+  // "Assinatura atrasada" / "Assinatura cancelada": informational — the paid time simply runs.
+  assert.equal(await deliver(db, c, { ...cycle("SUBSCRIPTION_EXPIRED", 90, 90), status: "PENDING" }, p), "ignored");
+  assert.equal(await deliver(db, c, { ...cycle("SUBSCRIPTION_CANCELED", 90, 90), status: "CANCELED" }, p), "ignored");
+  assert.equal((await access(db, u)).validUntil, parseKirvanoDate(at(90))?.toISOString());
+  // Kirvano's published "Reembolso" (same sale_id): the latest paid cycle is refunded.
+  assert.equal(await deliver(db, c, { ...cycle("SALE_REFUNDED", 60, 90), status: "REFUNDED" }, p), "applied");
+  assert.equal((await access(db, u)).validUntil, parseKirvanoDate(at(60))?.toISOString());
+});

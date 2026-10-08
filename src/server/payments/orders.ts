@@ -414,7 +414,14 @@ async function renewOrder(db: Db, config: CentralisConfig, provider: string, ord
 async function refund(db: Db, config: CentralisConfig, provider: string, ev: PaymentEvent): Promise<HandleResult> {
   const txId = ev.refundedTransactionId ?? ev.transactionId;
   if (!txId) return "ignored";
-  const [known] = await db.query<{ status: string }>(`select status from lastro.charges where provider = $1 and gateway_transaction_id = $2`, [provider, txId]);
+  // The charge refunded: the transaction itself or, when the gateway keys subscription cycles as
+  // "<sale>:<cycle>" (Kirvano), the most recent paid cycle of that sale.
+  const [known] = await db.query<{ id: string; status: string }>(
+    `select id, status from lastro.charges
+      where provider = $1 and (gateway_transaction_id = $2 or left(gateway_transaction_id, length($2) + 1) = $2 || ':')
+      order by (status = 'approved') desc, paid_at desc limit 1`,
+    [provider, txId],
+  );
   if (!known) {
     // A refund of money that never became a charge (e.g. an amount under review): add it there.
     const [review] = await db.query<{ id: string }>(
@@ -426,8 +433,8 @@ async function refund(db: Db, config: CentralisConfig, provider: string, ev: Pay
     throw new RetryLater("refund before payment");
   }
   const [charge] = await db.query<Charge>(
-    `update lastro.charges set status = 'refunded', refunded_at = $3 where provider = $1 and gateway_transaction_id = $2 and status = 'approved' returning *`,
-    [provider, txId, ev.occurredAt],
+    `update lastro.charges set status = 'refunded', refunded_at = $2 where id = $1 and status = 'approved' returning *`,
+    [known.id, ev.occurredAt],
   );
   if (!charge) return "duplicate";
   const [order] = await db.query<Order>(`select * from lastro.orders where id = $1`, [charge.order_id]);
