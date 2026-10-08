@@ -30,7 +30,7 @@ type Instructions = { kind: "pix"; copyPaste: string; qrCodeImage: string | null
 interface CheckoutInfo {
   account: { name: string; email: string | null; phone: string | null };
   access: AccessSummary;
-  payments: { available: boolean; methods: Method[]; recurring: boolean; hosted: boolean; autoRenews: boolean; name: string | null };
+  payments: { available: boolean; methods: Method[]; recurring: boolean; hosted: boolean; autoRenews: boolean; name: string | null; fields: Fields[] };
 }
 
 type Phase =
@@ -129,16 +129,19 @@ export function CheckoutScreen({ initialPlan, orderId }: { initialPlan: PlanId |
   const accountEmail = info?.account.email ?? null;
   const hosted = info?.payments.hosted ?? false;
   const gatewayName = info?.payments.name ?? "o meio de pagamento";
+  // The billing fields this gateway needs from Lastro (all four, or Kirvano's pre-fill set).
+  const fields: Fields[] = info?.payments.fields ?? [];
 
   const errors: Record<Fields, string | null> = useMemo(() => {
     const r = (x: { ok: boolean; error?: string }) => (x.ok ? null : (x as { error: string }).error);
+    const need = (f: Fields) => (info?.payments.fields ?? []).includes(f);
     return {
-      name: r(parseBillingName(values.name)),
-      email: accountEmail ? null : r(parseEmail(values.email)),
-      cpf: r(parseCpf(values.cpf)),
-      phone: r(parsePhone(values.phone)),
+      name: need("name") ? r(parseBillingName(values.name)) : null,
+      email: need("email") && !accountEmail ? r(parseEmail(values.email)) : null,
+      cpf: need("cpf") ? r(parseCpf(values.cpf)) : null,
+      phone: need("phone") ? r(parsePhone(values.phone)) : null,
     };
-  }, [values, accountEmail]);
+  }, [values, accountEmail, info]);
   const show = (f: Fields) => serverFields[f] || ((submitted || touched[f]) && errors[f]) || null;
   const set = (f: Fields) => (v: string) => {
     setValues((s) => ({ ...s, [f]: f === "cpf" ? maskCpf(v) : f === "phone" ? maskPhone(v) : v }));
@@ -201,14 +204,19 @@ export function CheckoutScreen({ initialPlan, orderId }: { initialPlan: PlanId |
       setFormError(ERRORS.payments_unavailable);
       return;
     }
-    if (!hosted && Object.values(errors).some(Boolean)) return;
+    if (Object.values(errors).some(Boolean)) return;
     setPhase({ name: "creating" });
     try {
       const { status, data } = await getJson<{ ok: boolean; error?: string; fields?: Partial<Record<Fields, string>>; order_id?: string; instructions?: Instructions }>("/api/checkout", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        // A hosted checkout (Kirvano) collects billing data on its own page: send only the plan.
-        body: JSON.stringify(hosted ? { plan_id: plan, idempotency_key: key.current } : { plan_id: plan, method, name: values.name, email: values.email, cpf: values.cpf, phone: values.phone, idempotency_key: key.current }),
+        // Only the fields this gateway needs (Kirvano: name, e-mail, phone to pre-fill its page).
+        body: JSON.stringify({
+          plan_id: plan,
+          idempotency_key: key.current,
+          ...(hosted ? {} : { method }),
+          ...Object.fromEntries(fields.map((f) => [f, values[f]])),
+        }),
       });
       if (status === 401) {
         router.replace(`${AUTH_ROUTES.login}?next=${encodeURIComponent(CHECKOUT_ROUTE)}`);
@@ -305,27 +313,17 @@ export function CheckoutScreen({ initialPlan, orderId }: { initialPlan: PlanId |
                   <div className="flex min-w-0 flex-col gap-8">
                     <PlanPicker value={plan} onChange={setPlan} monthlyDisabled={upgrade} />
 
-                    {hosted ? (
-                      <div className="surface-light flex items-start gap-3 rounded-[32px] p-5 sm:p-6">
-                        <span className="grid size-10 shrink-0 place-items-center rounded-full bg-electric/10 text-electric">
-                          <ShieldCheck className="size-5" aria-hidden />
-                        </span>
-                        <div>
-                          <p className="font-semibold text-ink-900">Pagamento seguro pela {gatewayName}</p>
-                          <p className="mt-1 text-[14px] leading-relaxed text-ink-500">
-                            Na próxima tela você escolhe Pix ou cartão e informa os dados de pagamento. Use o e-mail da sua conta{accountEmail ? ` (${accountEmail})` : ""}. Assim que a {gatewayName} confirmar, seu acesso é liberado aqui — sem precisar entrar de novo.
-                          </p>
-                        </div>
-                      </div>
-                    ) : (
-                    <>
+                    {fields.length > 0 && (
                     <fieldset className="surface-light rounded-[32px] p-5 sm:p-6">
                       <legend className="sr-only">Dados de cobrança</legend>
                       <p className="eyebrow mb-4 text-ink-500">Dados de cobrança</p>
                       <div className="grid gap-4 sm:grid-cols-2">
+                        {fields.includes("name") && (
                         <div className="sm:col-span-2">
                           <TextField label="Nome completo" name="name" icon={<UserRound className="size-[18px]" />} value={values.name} onChange={set("name")} onBlur={() => setTouched((t) => ({ ...t, name: true }))} error={show("name")} autoComplete="name" placeholder="Como no seu documento" maxLength={80} />
                         </div>
+                        )}
+                        {fields.includes("email") && (
                         <div className="sm:col-span-2">
                           <TextField
                             label="E-mail"
@@ -341,11 +339,28 @@ export function CheckoutScreen({ initialPlan, orderId }: { initialPlan: PlanId |
                             hint={accountEmail ? "O e-mail da sua conta." : "Para o comprovante do pagamento."}
                           />
                         </div>
-                        <TextField label="CPF" name="cpf" icon={<IdCard className="size-[18px]" />} value={values.cpf} onChange={set("cpf")} onBlur={() => setTouched((t) => ({ ...t, cpf: true }))} error={show("cpf")} inputMode="numeric" autoComplete="off" placeholder="000.000.000-00" maxLength={14} />
-                        <TextField label="Telefone" name="phone" icon={<Phone className="size-[18px]" />} value={values.phone} onChange={set("phone")} onBlur={() => setTouched((t) => ({ ...t, phone: true }))} error={show("phone")} inputMode="tel" autoComplete="tel-national" placeholder="(11) 98765-4321" maxLength={16} />
+                        )}
+                        {fields.includes("cpf") && <TextField label="CPF" name="cpf" icon={<IdCard className="size-[18px]" />} value={values.cpf} onChange={set("cpf")} onBlur={() => setTouched((t) => ({ ...t, cpf: true }))} error={show("cpf")} inputMode="numeric" autoComplete="off" placeholder="000.000.000-00" maxLength={14} />}
+                        {fields.includes("phone") && <TextField label="Telefone" name="phone" icon={<Phone className="size-[18px]" />} value={values.phone} onChange={set("phone")} onBlur={() => setTouched((t) => ({ ...t, phone: true }))} error={show("phone")} inputMode="tel" autoComplete="tel-national" placeholder="(11) 98765-4321" maxLength={16} />}
                       </div>
                     </fieldset>
-
+                    )}
+                    {hosted && (
+                      <div className="surface-light flex items-start gap-3 rounded-[32px] p-5 sm:p-6">
+                        <span className="grid size-10 shrink-0 place-items-center rounded-full bg-electric/10 text-electric">
+                          <ShieldCheck className="size-5" aria-hidden />
+                        </span>
+                        <div>
+                          <p className="font-semibold text-ink-900">Pagamento seguro pela {gatewayName}</p>
+                          <p className="mt-1 text-[14px] leading-relaxed text-ink-500">
+                            {fields.length
+                              ? `Na próxima tela seus dados já vêm preenchidos: você ${fields.includes("cpf") ? "" : "informa o CPF, "}escolhe Pix ou cartão e confirma. Assim que a ${gatewayName} aprovar, seu acesso é liberado aqui — sem precisar entrar de novo.`
+                              : `Na próxima tela você escolhe Pix ou cartão e informa os dados de pagamento. Assim que a ${gatewayName} confirmar, seu acesso é liberado aqui — sem precisar entrar de novo.`}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                    {!hosted && (
                     <div>
                       <p className="eyebrow mb-3 px-1 text-ink-500">Forma de pagamento</p>
                       <Segmented
@@ -364,7 +379,6 @@ export function CheckoutScreen({ initialPlan, orderId }: { initialPlan: PlanId |
                           : "Os dados do cartão são digitados no ambiente seguro do meio de pagamento — o Lastro não vê nem guarda o número do cartão."}
                       </p>
                     </div>
-                    </>
                     )}
                   </div>
 

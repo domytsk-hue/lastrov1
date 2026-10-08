@@ -15,6 +15,10 @@
 
 export type PaymentMethod = "pix" | "card";
 
+/** Billing fields Lastro's own checkout collects for a gateway. */
+export type BillingField = "name" | "email" | "cpf" | "phone";
+export const ALL_BILLING_FIELDS: BillingField[] = ["name", "email", "cpf", "phone"];
+
 export type PaymentEventType =
   | "payment.approved"     // money confirmed for the order's first charge
   | "payment.pending"      // e.g. Pix issued, card in analysis — NOT a purchase
@@ -68,8 +72,11 @@ export interface CheckoutRequest {
   plan: { id: string; name: string; amountMinor: number; currency: string; billing: "one_time" | "monthly" };
   /** null when the gateway's own page lets the buyer choose. */
   method: PaymentMethod | null;
-  /** Billing data goes to the gateway only; Lastro does not store the CPF. null with a hosted checkout. */
-  customer: { userId: string; name: string; email: string; phone: string; document: string } | null;
+  /**
+   * Billing data typed on Lastro's checkout. It goes to the gateway only; Lastro does not store
+   * the CPF. Fields the gateway's own page collects are null; no fields at all → null.
+   */
+  customer: { userId: string; name: string | null; email: string | null; phone: string | null; document: string | null } | null;
   /** Where the gateway sends the buyer back. The page only ASKS the server for the status. */
   returnUrl: string;
 }
@@ -85,6 +92,8 @@ export interface CheckoutResult {
   providerCheckoutId: string;
   providerPaymentId?: string;
   instructions: PaymentInstructions;
+  /** What may be saved for showing again later, when `instructions` carries personal data (e.g. a pre-filled link). */
+  storable?: PaymentInstructions;
   expiresAt?: Date;
 }
 
@@ -98,6 +107,11 @@ export interface PaymentProvider {
    * method (Pix or card). Lastro then asks for none of it: plan → redirect.
    */
   hostedCheckout?: boolean;
+  /**
+   * Fields Lastro's checkout collects and hands to the gateway (a hosted page can be pre-filled
+   * with them). Default: all four, or none with a hosted checkout.
+   */
+  billingFields?: BillingField[];
   /** The monthly plan is renewed automatically by the gateway (Lastro learns of each renewal by webhook). */
   autoRenews?: boolean;
   createCheckout(req: CheckoutRequest): Promise<CheckoutResult>;

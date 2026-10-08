@@ -3,11 +3,12 @@ import type { PaymentEvent, PaymentMethod, PaymentProvider } from "./provider.ts
 
 /**
  * Kirvano adapter. Kirvano is a HOSTED checkout: each plan is an offer with its own payment
- * page, where the buyer types name, e-mail, CPF and phone and pays with Pix or card. Lastro
- * sends nothing personal — only our order id, as the tracking parameter `src` that Kirvano
- * echoes back in every webhook (`utm.src`).
+ * page, where the buyer pays with Pix or card. Lastro's checkout collects name, e-mail and
+ * phone and hands them to that page pre-filled (Kirvano's documented `customer.*` URL fields),
+ * plus our order id as the tracking parameter `src`, which Kirvano echoes back in every
+ * webhook (`utm.src`). The CPF is typed on Kirvano's page unless KIRVANO_PREFILL_CPF=true.
  *
- *   /checkout → order (pending) → redirect to the offer page ?src=lastro-<order id>
+ *   /checkout → order (pending) → offer page ?src=lastro-<order id>&customer.name=…
  *   Kirvano webhook (token checked) → SALE_APPROVED → amount, plan and order checked → access
  *
  * Kirvano has no public API to create or query a charge, so confirmation comes ONLY from its
@@ -29,6 +30,11 @@ export interface KirvanoConfig {
   offerId: { mensal: string | null; vitalicio: string | null };
   /** The Mensal offer is a Kirvano subscription (renewed automatically by Kirvano). */
   monthlyRecurring: boolean;
+  /**
+   * Also pre-fill the CPF on Kirvano's page. Off by default: a URL is kept in browser history
+   * and can reach the tracking pixels of the offer page.
+   */
+  prefillCpf: boolean;
 }
 
 const https = (v: string | undefined) => {
@@ -52,6 +58,7 @@ export function kirvanoConfig(env: NodeJS.ProcessEnv = process.env): KirvanoConf
     checkoutUrl: { mensal, vitalicio },
     offerId: { mensal: env.KIRVANO_OFFER_ID_MENSAL?.trim() || null, vitalicio: env.KIRVANO_OFFER_ID_VITALICIO?.trim() || null },
     monthlyRecurring: env.KIRVANO_MENSAL_RECORRENTE === "true",
+    prefillCpf: env.KIRVANO_PREFILL_CPF === "true",
   };
 }
 
@@ -171,12 +178,30 @@ export function createKirvanoProvider(config: KirvanoConfig): PaymentProvider {
     // Lastro can't cancel a Kirvano subscription by API; Kirvano manages it.
     supportsSubscriptions: false,
     hostedCheckout: true,
+    // Lastro's checkout collects these and Kirvano's page arrives pre-filled with them
+    // (customer.name / customer.email / customer.phone / customer.document); the buyer only pays.
+    billingFields: config.prefillCpf ? ["name", "email", "phone", "cpf"] : ["name", "email", "phone"],
     autoRenews: config.monthlyRecurring,
     async createCheckout(req) {
       const page = new URL(req.plan.id === "mensal" ? config.checkoutUrl.mensal : config.checkoutUrl.vitalicio);
       // Our order reference travels as Kirvano's tracking parameter and comes back as utm.src.
       page.searchParams.set("src", orderRef(req.orderId));
-      return { providerCheckoutId: orderRef(req.orderId), instructions: { kind: "redirect", url: page.toString() } };
+      const storable = page.toString();
+      const c = req.customer;
+      const prefill: [string, string | null | undefined][] = [
+        ["customer.name", c?.name],
+        ["customer.email", c?.email],
+        ["customer.phone", c?.phone?.replace(/\D/g, "")],
+        ["customer.document", config.prefillCpf ? c?.document : null],
+      ];
+      // Kirvano documents spaces as %20 (not "+"), so each value is percent-encoded by hand.
+      const extra = prefill.filter(([, v]) => v).map(([k, v]) => `${k}=${encodeURIComponent(v as string)}`).join("&");
+      return {
+        providerCheckoutId: orderRef(req.orderId),
+        instructions: { kind: "redirect", url: extra ? `${storable}&${extra}` : storable },
+        // Saved without the personal data; the pre-filled link exists only in this response.
+        storable: { kind: "redirect", url: storable },
+      };
     },
     async parseWebhook(rawBody, headers, url) {
       // The token Kirvano sends (header) or the one in the webhook URL we gave it.

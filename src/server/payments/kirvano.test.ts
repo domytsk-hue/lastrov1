@@ -5,7 +5,7 @@ import { browser, freshDb, landWithRef, newUser, outbox, promote, testConfig } f
 import type { Db } from "../db/index.ts";
 import type { CentralisConfig } from "../env.ts";
 import { getAccess, HOLDINGS } from "../access/entitlements.ts";
-import { createOrder } from "./checkout.ts";
+import { attachCheckout, billingFieldsOf, createOrder, validateBilling } from "./checkout.ts";
 import { handlePaymentEvent } from "./orders.ts";
 import { createKirvanoProvider, kirvanoConfig, kirvanoEvent, orderRef, parseBrlToMinor, parseKirvanoDate, type KirvanoConfig } from "./kirvano.ts";
 import { getPaymentProvider } from "./registry.ts";
@@ -331,4 +331,50 @@ test("kirvano: renewals that reuse the original sale_id still add a month each; 
   // Kirvano's published "Reembolso" (same sale_id): the latest paid cycle is refunded.
   assert.equal(await deliver(db, c, { ...cycle("SALE_REFUNDED", 60, 90), status: "REFUNDED" }, p), "applied");
   assert.equal((await access(db, u)).validUntil, parseKirvanoDate(at(60))?.toISOString());
+});
+
+test("kirvano: Lastro's form pre-fills Kirvano's page (name, e-mail, phone); the CPF only with KIRVANO_PREFILL_CPF; nothing personal is saved", async () => {
+  const req = (p: ReturnType<typeof provider>) =>
+    p.createCheckout({
+      orderId: "0f0f0f0f-0000-4000-8000-000000000003",
+      plan: { id: "vitalicio", name: "Vitalício", amountMinor: 9990, currency: "BRL", billing: "one_time" },
+      method: null,
+      customer: { userId: "u_1", name: "Maria Souza", email: "maria@exemplo.com", phone: "+5511987654321", document: "52998224725" },
+      returnUrl: "",
+    });
+  const p = provider();
+  assert.deepEqual(p.billingFields, ["name", "email", "phone"]);
+  const r = await req(p);
+  const raw = (r.instructions as { url: string }).url;
+  assert.ok(raw.includes("customer.name=Maria%20Souza"), raw); // spaces as %20, as Kirvano documents
+  const url = new URL(raw);
+  assert.deepEqual(Object.fromEntries(url.searchParams), {
+    src: "lastro-0f0f0f0f-0000-4000-8000-000000000003",
+    "customer.name": "Maria Souza",
+    "customer.email": "maria@exemplo.com",
+    "customer.phone": "5511987654321",
+  });
+  assert.equal((r.storable as { url: string }).url, "https://pay.kirvano.com/vitalicio-offer?src=lastro-0f0f0f0f-0000-4000-8000-000000000003");
+
+  const withCpf = provider({ KIRVANO_PREFILL_CPF: "true" });
+  assert.deepEqual(withCpf.billingFields, ["name", "email", "phone", "cpf"]);
+  assert.equal(new URL(((await req(withCpf)).instructions as { url: string }).url).searchParams.get("customer.document"), "52998224725");
+
+  // The order keeps only the link without personal data.
+  const db = await freshDb();
+  const c = testConfig();
+  const u = await newUser(db, c);
+  const o = await kirvanoOrder(db, c, u, "vitalicio");
+  await attachCheckout(db, o.id, await p.createCheckout({ orderId: o.id, plan: { id: "vitalicio", name: "Vitalício", amountMinor: 9990, currency: "BRL", billing: "one_time" }, method: null, customer: { userId: u, name: "Maria Souza", email: "maria@exemplo.com", phone: "+5511987654321", document: null }, returnUrl: "" }));
+  const [row] = await db.query<{ payment_instructions: { url: string } }>(`select payment_instructions from lastro.orders where id = $1`, [o.id]);
+  assert.equal(row.payment_instructions.url.includes("customer."), false);
+});
+
+test("billing validation follows the gateway's fields: Kirvano asks name, e-mail and phone — not the CPF", () => {
+  const p = provider();
+  const ok = validateBilling({ name: "Maria Souza", phone: "(11) 98765-4321", cpf: "", email: "" }, "conta@lastro.com", billingFieldsOf(p));
+  assert.ok(ok.ok);
+  assert.deepEqual(ok.value, { name: "Maria Souza", document: null, phone: "+5511987654321", email: "conta@lastro.com" });
+  const bad = validateBilling({ name: "Maria", phone: "", cpf: "", email: "" }, null, billingFieldsOf(p));
+  assert.deepEqual(Object.keys((bad as { errors: object }).errors).sort(), ["email", "name", "phone"]);
 });

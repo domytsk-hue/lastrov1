@@ -6,7 +6,7 @@ import { latestValidAttribution } from "../tracking/attribution.ts";
 import { HOLDINGS, getAccess } from "../access/entitlements.ts";
 import { parseBillingName, parseCpf, parseEmail, parsePhone } from "../../lib/billing.ts";
 import { getPlan, handlePaymentEvent, type HandleResult, type Plan } from "./orders.ts";
-import type { CheckoutResult, PaymentInstructions, PaymentMethod, PaymentProvider } from "./provider.ts";
+import { ALL_BILLING_FIELDS, type BillingField, type CheckoutResult, type PaymentInstructions, type PaymentMethod, type PaymentProvider } from "./provider.ts";
 
 /**
  * The checkout intent: the browser says WHICH plan and HOW to pay; the server decides who
@@ -29,27 +29,38 @@ export interface BillingInput {
 }
 
 export interface BillingDetails {
-  name: string;
+  name: string | null;
   /** 11 digits. Sent to the gateway only; never stored by Lastro. */
-  document: string;
-  phone: string;
-  email: string;
+  document: string | null;
+  phone: string | null;
+  email: string | null;
 }
 
-/** Server-side validation of the billing form. The account e-mail wins over the typed one. */
-export function validateBilling(input: BillingInput, accountEmail: string | null): { ok: true; value: BillingDetails } | { ok: false; errors: Record<string, string> } {
+/**
+ * Server-side validation of the billing form, for the fields this gateway needs from Lastro.
+ * The account e-mail wins over the typed one.
+ */
+export function validateBilling(
+  input: BillingInput,
+  accountEmail: string | null,
+  fields: BillingField[] = ALL_BILLING_FIELDS,
+): { ok: true; value: BillingDetails } | { ok: false; errors: Record<string, string> } {
   const errors: Record<string, string> = {};
-  const name = parseBillingName(String(input.name ?? ""));
-  const cpf = parseCpf(String(input.cpf ?? ""));
-  const phone = parsePhone(String(input.phone ?? ""));
-  const email = accountEmail ? ({ ok: true, value: accountEmail } as const) : parseEmail(String(input.email ?? ""));
-  if (!name.ok) errors.name = name.error;
-  if (!cpf.ok) errors.cpf = cpf.error;
-  if (!phone.ok) errors.phone = phone.error;
-  if (!email.ok) errors.email = email.error;
-  if (!name.ok || !cpf.ok || !phone.ok || !email.ok) return { ok: false, errors };
-  return { ok: true, value: { name: name.value, document: cpf.value, phone: phone.value, email: email.value } };
+  const value: BillingDetails = { name: null, document: null, phone: null, email: null };
+  const check = (field: BillingField, key: keyof BillingDetails, r: { ok: true; value: string } | { ok: false; error: string }) => {
+    if (!fields.includes(field)) return;
+    if (r.ok) value[key] = r.value;
+    else errors[field] = r.error;
+  };
+  check("name", "name", parseBillingName(String(input.name ?? "")));
+  check("cpf", "document", parseCpf(String(input.cpf ?? "")));
+  check("phone", "phone", parsePhone(String(input.phone ?? "")));
+  check("email", "email", accountEmail ? { ok: true, value: accountEmail } : parseEmail(String(input.email ?? "")));
+  return Object.keys(errors).length ? { ok: false, errors } : { ok: true, value };
 }
+
+/** The billing fields Lastro collects for this gateway. */
+export const billingFieldsOf = (p: Pick<PaymentProvider, "hostedCheckout" | "billingFields">): BillingField[] => p.billingFields ?? (p.hostedCheckout ? [] : ALL_BILLING_FIELDS);
 
 export interface OrderRow {
   id: string;
@@ -153,7 +164,7 @@ export async function createOrder(
 export async function attachCheckout(db: Db, orderId: string, result: CheckoutResult) {
   await db.query(
     `update lastro.orders set provider_checkout_id = $2, provider_payment_id = $3, payment_instructions = $4::jsonb, expires_at = $5, updated_at = now() where id = $1`,
-    [orderId, result.providerCheckoutId, result.providerPaymentId ?? null, JSON.stringify(result.instructions), result.expiresAt ?? null],
+    [orderId, result.providerCheckoutId, result.providerPaymentId ?? null, JSON.stringify(result.storable ?? result.instructions), result.expiresAt ?? null],
   );
 }
 

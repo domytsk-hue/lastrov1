@@ -4,7 +4,7 @@ import { getAccess } from "@/server/access/entitlements.ts";
 import { currentUser, NO_STORE } from "@/server/access/viewer.ts";
 import { scheduleDrain } from "@/server/centralis/runtime.ts";
 import { COOKIES, readCookie, readJson } from "@/server/http.ts";
-import { attachCheckout, createOrder, validateBilling } from "@/server/payments/checkout.ts";
+import { attachCheckout, billingFieldsOf, createOrder, validateBilling } from "@/server/payments/checkout.ts";
 import { activePaymentProvider } from "@/server/payments/registry.ts";
 
 export const runtime = "nodejs";
@@ -28,6 +28,7 @@ export async function GET() {
       hosted: provider?.hostedCheckout ?? false,
       autoRenews: provider?.autoRenews ?? false,
       name: provider?.id === "kirvano" ? "Kirvano" : null,
+      fields: provider ? billingFieldsOf(provider) : [],
     },
   });
 }
@@ -47,8 +48,9 @@ export async function POST(req: Request) {
   if (!provider) return json({ ok: false, error: "payments_unavailable" }, 503);
 
   const body = await readJson(req);
-  // A hosted checkout (Kirvano) collects the billing data on its own page: Lastro asks for none.
-  const billing = provider.hostedCheckout ? null : validateBilling({ name: body.name, cpf: body.cpf, phone: body.phone, email: body.email }, user.email);
+  // Only the fields this gateway needs from Lastro (Kirvano: what pre-fills its page).
+  const fields = billingFieldsOf(provider);
+  const billing = fields.length ? validateBilling({ name: body.name, cpf: body.cpf, phone: body.phone, email: body.email }, user.email, fields) : null;
   if (billing && !billing.ok) return json({ ok: false, error: "invalid_billing", fields: billing.errors }, 422);
 
   const config = centralisConfig();
@@ -64,8 +66,9 @@ export async function POST(req: Request) {
   const { order, plan } = created;
   scheduleDrain();
 
-  // Already has its charge (refresh, double click, second tab): show the same one again.
-  if (order.provider_checkout_id && order.payment_instructions) {
+  // Already has its charge (refresh, double click, second tab): show the same one again. A
+  // hosted page is only a link, rebuilt each time (it may carry the freshly typed data).
+  if (order.provider_checkout_id && order.payment_instructions && !provider.hostedCheckout) {
     return json({ ok: true, order_id: order.id, status: order.status, instructions: order.payment_instructions, expires_at: order.expires_at });
   }
 

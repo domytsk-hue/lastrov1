@@ -212,18 +212,33 @@ values (gen_random_uuid(), '<user id>', 'admin', now(), null, '<why>');
 
 ## Kirvano (the production gateway)
 
-Kirvano is a **hosted checkout**:
-- each plan is an offer in Kirvano with its own payment page;
-- the buyer types name, e-mail, CPF and phone, and pays with Pix or card **on Kirvano's
-  page**;
-- so with Kirvano, Lastro's `/checkout` only asks for the plan. It sends the buyer to the
-  offer page with **one** parameter: `?src=lastro-<order id>`. No personal data goes in the
-  URL.
+Kirvano is a **hosted checkout**: the payment itself (Pix, card) happens on the offer's
+Kirvano page.
+
+**Lastro's own checkout does everything before that:**
+- the buyer picks the plan;
+- the buyer types name and phone (the e-mail comes from the account).
+
+**Kirvano's page then arrives pre-filled.** It uses Kirvano's documented `customer.*` URL
+fields, so the buyer only enters the CPF, chooses Pix or card and confirms.
+
+**What the link to Kirvano carries:**
+- `src=lastro-<order id>`, which comes back in every webhook as `utm.src`;
+- `customer.name`, `customer.email` and `customer.phone`, with spaces written as `%20`, as
+  Kirvano documents.
+
+**About the CPF:**
+- The CPF is **not** put in the link by default. A URL stays in browser history and can reach
+  the tracking pixels installed on the offer page.
+- `KIRVANO_PREFILL_CPF=true` adds it (`customer.document`). The checkout then also asks for
+  the CPF.
+- The order saves the link **without** these personal fields.
 
 Adapter: `src/server/payments/kirvano.ts`.
 
 ```
-/checkout → order (pending) → https://pay.kirvano.com/<offer>?src=lastro-<order id>
+/checkout (plan, name, phone) → order (pending)
+  → https://pay.kirvano.com/<offer>?src=lastro-<order id>&customer.name=…&customer.email=…&customer.phone=…
 Kirvano webhook ──(token)──► /api/payments/webhook/kirvano → SALE_APPROVED → checks → access
 ```
 
@@ -361,6 +376,7 @@ These are worth confirming on the first real sale (in "Ver logs"):
 | `KIRVANO_CHECKOUT_URL_MENSAL` / `_VITALICIO` | server | each offer's payment page (https) |
 | `KIRVANO_OFFER_ID_MENSAL` / `_VITALICIO` | server | offer ids; sales of anything else never release access |
 | `KIRVANO_MENSAL_RECORRENTE` | server | `true` when Mensal is a Kirvano subscription |
+| `KIRVANO_PREFILL_CPF` | server | `true` also asks the CPF on Lastro's checkout and pre-fills it on Kirvano (default: off) |
 | `PAYMENT_SANDBOX_SECRET` | dev/test only | sandbox webhook HMAC secret |
 | `CRON_SECRET` | server | the scheduled flush also runs plan expiry and renewal cancellations |
 
