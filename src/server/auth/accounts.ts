@@ -146,3 +146,24 @@ export async function signIn(
     return { ok: true as const, value: { session: toClientSession(user), ...s } };
   });
 }
+
+/**
+ * Sets a new password for a signed-in user (the session is the proof; no old password asked).
+ * Every other session of the account is signed out; the one making the change stays.
+ * Nothing about it goes to Centralis or the logs.
+ */
+export async function changePassword(db: Db, userId: string, password: unknown, keepSessionToken: string): Promise<Result<true>> {
+  const pw = validatePassword(typeof password === "string" ? password : "");
+  if (!pw.ok) return pw;
+  const salt = randomSalt();
+  const hash = await hashPassword(pw.value, salt);
+  return db.tx(async (tx) => {
+    const [u] = await tx.query(
+      `update lastro.users set password_hash = $2, password_salt = $3, password_iterations = $4, updated_at = now() where id = $1 and status = 'active' returning id`,
+      [userId, hash, salt, PBKDF2_ITERATIONS],
+    );
+    if (!u) return { ok: false as const, error: "Conta não encontrada." };
+    await tx.query(`delete from lastro.sessions where user_id = $1 and id <> $2`, [userId, sessionId(keepSessionToken)]);
+    return { ok: true as const, value: true as const };
+  });
+}

@@ -1,10 +1,10 @@
 "use client";
 
-import { AtSign, Camera, ChevronRight, Loader2, Eye, Fingerprint, KeyRound, Landmark, LogOut, Phone, RotateCcw, Shapes, Target } from "lucide-react";
+import { AtSign, Camera, Check, ChevronRight, Loader2, Eye, EyeOff, Fingerprint, KeyRound, Landmark, Lock, LogOut, Phone, RotateCcw, Shapes, Target } from "lucide-react";
 import Link from "next/link";
 import { useRef, useState } from "react";
 import { EXPENSE_CATEGORIES, INCOME_CATEGORIES } from "@/product/data/categories";
-import { formatIdentifier } from "@/auth/rules";
+import { formatIdentifier, passwordChecks, validatePassword } from "@/auth/rules";
 import { evaluate } from "@/product/domain/calculator";
 import { photoToAvatar } from "@/lib/image";
 import { cn } from "@/lib/cn";
@@ -17,6 +17,7 @@ import { useUI } from "@/product/store/ui-store";
 import { LastroMark } from "@/components/shared/brand/LastroMark";
 import { Avatar } from "@/components/shared/ui/Avatar";
 import { BottomSheet } from "@/components/shared/ui/BottomSheet";
+import { TextField } from "@/components/auth/AuthScreen";
 import { CategoryIcon } from "@/components/product/ui/CategoryIcon";
 import { AffiliateSection } from "@/components/product/profile/AffiliateSection";
 import { PlanSection } from "@/components/product/profile/PlanSection";
@@ -38,7 +39,7 @@ export function ProfileScreen() {
   const { session, signOut } = useAuth();
   const { privacy, togglePrivacy } = useUI();
   const toast = useToast();
-  const [sheet, setSheet] = useState<"profile" | "categories" | null>(null);
+  const [sheet, setSheet] = useState<"profile" | "categories" | "password" | null>(null);
   const [confirmReset, setConfirmReset] = useState(false);
   const { score } = lastroScore(state, today);
   const s = streak(state, today);
@@ -110,6 +111,7 @@ export function ProfileScreen() {
         </Group>
 
         <Group title="Segurança">
+          {!isDemo && session && !session.demo && <Row icon={<Lock className="size-[18px]" />} label="Alterar senha" onClick={() => setSheet("password")} />}
           <Row icon={<Fingerprint className="size-[18px]" />} label="Desbloqueio por biometria" value="Em breve" disabled />
           <Row icon={<KeyRound className="size-[18px]" />} label="Seus dados" value="Salvos só neste aparelho" disabled />
         </Group>
@@ -145,6 +147,9 @@ export function ProfileScreen() {
 
       <BottomSheet open={sheet === "profile"} onClose={() => setSheet(null)} title="Objetivo e renda">
         {sheet === "profile" && <ProfileForm onDone={() => setSheet(null)} />}
+      </BottomSheet>
+      <BottomSheet open={sheet === "password"} onClose={() => setSheet(null)} title="Alterar senha">
+        {sheet === "password" && <PasswordForm onDone={() => setSheet(null)} />}
       </BottomSheet>
       <BottomSheet open={sheet === "categories"} onClose={() => setSheet(null)} title="Categorias">
         <p className="eyebrow mb-2 text-ink-500">Gastos</p>
@@ -247,6 +252,86 @@ function ProfileForm({ onDone }: { onDone: () => void }) {
         Salvar
       </Button>
     </div>
+  );
+}
+
+/** New password for the signed-in account: just the new one, saved on the server. */
+function PasswordForm({ onDone }: { onDone: () => void }) {
+  const toast = useToast();
+  const [password, setPassword] = useState("");
+  const [show, setShow] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const valid = validatePassword(password);
+
+  const save = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSubmitted(true);
+    setError(null);
+    if (!valid.ok || saving) return;
+    setSaving(true);
+    try {
+      const res = await fetch("/api/me/password", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ password }) });
+      const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (res.ok && data.ok) {
+        toast.show({ title: "Senha alterada", body: "Use a nova senha no próximo acesso." });
+        onDone();
+        return;
+      }
+      setError(res.status === 401 ? "Sua sessão expirou. Entre de novo para alterar a senha." : (data.error ?? "Não foi possível salvar. Tente de novo."));
+    } catch {
+      setError("Sem conexão. Tente de novo.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <form onSubmit={save} className="flex flex-col gap-4" noValidate>
+      <TextField
+        label="Nova senha"
+        name="new-password"
+        icon={<Lock className="size-[18px]" />}
+        type={show ? "text" : "password"}
+        value={password}
+        onChange={setPassword}
+        autoComplete="new-password"
+        placeholder="Digite a nova senha"
+        maxLength={128}
+        autoFocus
+        error={submitted && !valid.ok ? valid.error : null}
+        trailing={
+          <button
+            type="button"
+            onClick={() => setShow((v) => !v)}
+            className="grid size-10 place-items-center rounded-full text-ink-500 hover:text-ink-900"
+            aria-label={show ? "Ocultar senha" : "Mostrar senha"}
+            aria-pressed={show}
+          >
+            {show ? <EyeOff className="size-[18px]" /> : <Eye className="size-[18px]" />}
+          </button>
+        }
+      />
+      <ul className="-mt-1 flex flex-wrap gap-x-4 gap-y-1.5 pl-2" aria-label="Requisitos da senha">
+        {passwordChecks(password).map((c) => (
+          <li key={c.id} className={cn("flex items-center gap-1.5 text-[12px] transition-colors", c.ok ? "text-mint-ink" : submitted ? "text-rose-ink" : "text-ink-500")}>
+            <span className={cn("grid size-4 place-items-center rounded-full", c.ok ? "bg-mint/20" : "bg-ink-900/[0.06]")}>{c.ok && <Check className="size-3" strokeWidth={3} />}</span>
+            {c.label}
+            <span className="sr-only">{c.ok ? "— atendido" : "— pendente"}</span>
+          </li>
+        ))}
+      </ul>
+      {error && (
+        <p role="alert" className="rounded-[22px] bg-rose/10 px-4 py-3 text-[14px] text-rose-ink">
+          {error}
+        </p>
+      )}
+      <p className="pl-2 text-[13px] text-ink-500">Por segurança, outros aparelhos conectados nesta conta vão precisar entrar de novo.</p>
+      <Button size="lg" type="submit" disabled={saving}>
+        {saving ? <Loader2 className="size-4 animate-spin" /> : "Salvar nova senha"}
+      </Button>
+    </form>
   );
 }
 

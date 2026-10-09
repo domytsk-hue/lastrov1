@@ -6,7 +6,7 @@ import { handleCentralisAction } from "../centralis/actions.ts";
 import { flushOutbox } from "../centralis/outbox.ts";
 import { findForbiddenKeys } from "../centralis/serialize.ts";
 import { myAffiliate } from "../affiliates/me.ts";
-import { signIn, signUp, userForSessionToken } from "../auth/accounts.ts";
+import { changePassword, signIn, signUp, userForSessionToken } from "../auth/accounts.ts";
 import { handlePaymentEvent } from "./orders.ts";
 import { createSandboxProvider, signSandboxWebhook } from "./sandbox.ts";
 
@@ -44,6 +44,32 @@ test("accounts: sign up, duplicate rejected, wrong password rejected, session to
   assert.equal((await userForSessionToken(db, ok.value.token))?.id, r.value.session.userId);
   const stored = await db.query<{ id: string }>(`select id from lastro.sessions`);
   assert.ok(stored.every((s) => s.id !== ok.value.token && s.id.length === 64));
+});
+
+test("accounts: a signed-in user changes the password with only the new one; other devices are signed out", async () => {
+  const db = await freshDb();
+  const config = testConfig();
+  const r = await signUp(db, config, { name: "Ana", email: "ana@exemplo.com", phone: "11955554444", password: "senhaAntiga1" }, { visitorId: null });
+  assert.ok(r.ok);
+  const other = await signIn(db, config, { identifier: "ana@exemplo.com", password: "senhaAntiga1" }, { visitorId: null });
+  assert.ok(other.ok);
+  const before = (await outbox(db)).length;
+
+  // Weak passwords are refused and nothing changes.
+  assert.equal((await changePassword(db, r.value.session.userId, "curta", r.value.token)).ok, false);
+  assert.equal((await changePassword(db, r.value.session.userId, undefined, r.value.token)).ok, false);
+  assert.ok((await signIn(db, config, { identifier: "ana@exemplo.com", password: "senhaAntiga1" }, { visitorId: null })).ok);
+
+  assert.deepEqual(await changePassword(db, r.value.session.userId, "novaSenha99", r.value.token), { ok: true, value: true });
+  assert.equal((await signIn(db, config, { identifier: "ana@exemplo.com", password: "senhaAntiga1" }, { visitorId: null })).ok, false);
+  assert.ok((await signIn(db, config, { identifier: "11955554444", password: "novaSenha99" }, { visitorId: null })).ok);
+  // This device stays signed in; the other one is signed out.
+  assert.equal((await userForSessionToken(db, r.value.token))?.id, r.value.session.userId);
+  assert.equal(await userForSessionToken(db, other.value.token), null);
+  // Nothing about the password goes to Centralis (only the sign-ins above were queued).
+  const events = (await outbox(db)).slice(before);
+  assert.ok(events.every((e) => e.event === "login"), JSON.stringify(events.map((e) => e.event)));
+  assert.equal(JSON.stringify(await outbox(db)).includes("novaSenha99"), false);
 });
 
 /* -------------------------------- clicks & attribution -------------------------------- */
