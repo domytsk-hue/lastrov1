@@ -56,7 +56,15 @@ export async function createPostgresDb(url: string): Promise<Db> {
   type Q = { unsafe: (text: string, params?: never[]) => Promise<unknown> };
   const wrap = (q: Q, inTx: boolean): Db => ({
     query: async <T>(text: string, params: unknown[] = []) => (await q.unsafe(text, params as never[])) as T[],
-    tx: inTx ? (fn) => fn(wrap(q, true)) : (fn) => sql.begin((t) => fn(wrap(t as unknown as Q, true))) as Promise<never>,
+    tx: inTx
+      ? (fn) => fn(wrap(q, true))
+      : (fn) =>
+          sql.begin(async (t) => {
+            // If the serverless function is frozen or killed mid-transaction, Postgres ends the
+            // transaction (and frees its locks) on its own instead of keeping them for days.
+            await (t as unknown as Q).unsafe(`set local idle_in_transaction_session_timeout = '30s'`);
+            return fn(wrap(t as unknown as Q, true));
+          }) as Promise<never>,
   });
   return wrap(sql as unknown as Q, false);
 }

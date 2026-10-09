@@ -52,14 +52,20 @@ export async function syncUsersBatch(db: Db, config: CentralisConfig, after: str
  * Runs one bounded step of the first-ever sync, the first time the integration is enabled.
  * Progress is stored, so it resumes across flushes and restarts.
  */
-export async function continueInitialSync(db: Db, config: CentralisConfig, batch = 200): Promise<"done" | "progressing" | "skipped"> {
+export async function continueInitialSync(db: Db, config: CentralisConfig, batch = 25): Promise<"done" | "progressing" | "skipped" | "busy"> {
   if (!config.enabled) return "skipped";
+  // Finished (the normal case): a plain read, no lock, no transaction.
+  const [peek] = await db.query<{ value: { done?: boolean } }>(`select value from lastro.integration_state where key = 'initial_user_sync'`);
+  if (peek?.value.done) return "done";
   return db.tx(async (tx) => {
+    await tx.query(`insert into lastro.integration_state (key, value, updated_at) values ('initial_user_sync', '{"done": false}'::jsonb, now()) on conflict (key) do nothing`);
+    // Another worker holds the step: skip it instead of queueing behind it.
     const [state] = await tx.query<{ value: { done?: boolean; cursor?: string | null } }>(
-      `select value from lastro.integration_state where key = 'initial_user_sync' for update`,
+      `select value from lastro.integration_state where key = 'initial_user_sync' for update skip locked`,
     );
-    if (state?.value.done) return "done";
-    const { next } = await syncUsersBatch(tx, config, state?.value.cursor ?? null, batch);
+    if (!state) return "busy";
+    if (state.value.done) return "done";
+    const { next } = await syncUsersBatch(tx, config, state.value.cursor ?? null, batch);
     const value = next ? { done: false, cursor: next } : { done: true, finished_at: new Date().toISOString() };
     await tx.query(
       `insert into lastro.integration_state (key, value, updated_at) values ('initial_user_sync', $1::jsonb, now())

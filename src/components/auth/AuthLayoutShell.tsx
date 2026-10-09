@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useAuth } from "@/auth/auth-store";
 import { CHECKOUT_ROUTE, ROUTES, safeNext } from "@/config/routes";
 import { isPlanId } from "@/config/plans";
@@ -15,13 +15,20 @@ import { LastroLoader } from "@/components/shared/brand/LastroMark";
  * Access comes from the server; this only picks the next screen.
  */
 export function AuthLayoutShell({ children }: { children: React.ReactNode }) {
-  const { session } = useAuth();
+  const { session, signOut } = useAuth();
   const router = useRouter();
+  // Arriving here from the demo (e.g. a plan button on the landing) means "create my account":
+  // the demo is left so the form shows. Choosing the demo ON this page still opens it.
+  const arrived = useRef(false);
 
   useEffect(() => {
+    if (session === undefined) return;
+    const firstLook = !arrived.current;
+    arrived.current = true;
     if (!session) return;
     if (session.demo) {
-      router.replace(ROUTES.home);
+      if (firstLook) signOut();
+      else router.replace(ROUTES.home);
       return;
     }
     const params = new URLSearchParams(window.location.search);
@@ -40,7 +47,7 @@ export function AuthLayoutShell({ children }: { children: React.ReactNode }) {
     return () => {
       alive = false;
     };
-  }, [session, router]);
+  }, [session, router, signOut]);
 
   if (session !== null) return <LastroLoader />;
   return <>{children}</>;

@@ -32,11 +32,12 @@ export function PrimaryCta({
 }) {
   const { session } = useAuth();
   const m = useMagnetic<HTMLAnchorElement>(3);
-  const signedIn = !!session;
+  // The on-device demo is not an account: its visitors still go to sign-up.
+  const signedIn = !!session && !session.demo;
   return (
     <MotionLink
       ref={m.ref}
-      href={signedIn ? (plan && !session.demo ? `${CHECKOUT_ROUTE}?plano=${plan}` : ROUTES.home) : plan ? `${AUTH_ROUTES.cadastro}?plano=${plan}` : AUTH_ROUTES.cadastro}
+      href={signedIn ? (plan ? `${CHECKOUT_ROUTE}?plano=${plan}` : ROUTES.home) : plan ? `${AUTH_ROUTES.cadastro}?plano=${plan}` : AUTH_ROUTES.cadastro}
       whileTap={{ scale: 0.97 }}
       animate={{ x: m.offset.x, y: m.offset.y }}
       transition={spring.snappy}

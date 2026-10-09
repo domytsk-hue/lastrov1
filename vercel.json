@@ -1,0 +1,4 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "crons": [{ "path": "/api/integrations/centralis/outbox/flush", "schedule": "17 9 * * *" }]
+}

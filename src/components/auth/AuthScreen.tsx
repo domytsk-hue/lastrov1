@@ -97,7 +97,7 @@ export function AuthScreen() {
 
           <p className="mt-8 flex items-start gap-2 text-[13px] leading-relaxed text-ink-500">
             <Lock className="mt-0.5 size-3.5 shrink-0" />
-            Nesta versão, sua conta e seus dados ficam salvos apenas neste aparelho. A senha é guardada de forma criptografada.
+            Sua conta fica protegida nos servidores do Lastro e a senha é guardada de forma criptografada.
           </p>
         </div>
       </main>

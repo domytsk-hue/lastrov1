@@ -1,7 +1,7 @@
 import "server-only";
 import { after } from "next/server";
-import { getDb } from "../db/index.ts";
-import { centralisConfig, cronSecret } from "../env.ts";
+import { getDb, type Db } from "../db/index.ts";
+import { centralisConfig, cronSecret, type CentralisConfig } from "../env.ts";
 import { createCentralisClient } from "./client.ts";
 import { centralisLog } from "./log.ts";
 import { flushOutbox } from "./outbox.ts";
@@ -23,7 +23,34 @@ async function billingUpkeep() {
   return { expired, cancellations };
 }
 
-/** One bounded drain: billing upkeep, a step of the initial sync, then delivery rounds of 50 events (≤ 1,000). */
+/** How often upkeep (plan expiry, renewal cancellations, initial sync) may run from page traffic. */
+const UPKEEP_EVERY_MINUTES = 10;
+
+/**
+ * Runs upkeep only if nobody ran it in the last UPKEEP_EVERY_MINUTES and nobody is running it
+ * now. Never waits for a lock: a busy or recent run means "skip" (it is never urgent — access
+ * itself is computed from dates on every request).
+ */
+export async function upkeepIfDue(db: Db, config: CentralisConfig): Promise<boolean> {
+  const due = await db.tx(async (tx) => {
+    const [{ locked }] = await tx.query<{ locked: boolean }>(`select pg_try_advisory_xact_lock(hashtext('lastro:upkeep')) as locked`);
+    if (!locked) return false;
+    const [last] = await tx.query<{ value: unknown }>(`select value from lastro.integration_state where key = 'last_upkeep_at'`);
+    const at = typeof last?.value === "string" ? Date.parse(last.value) : NaN;
+    if (Number.isFinite(at) && at > Date.now() - UPKEEP_EVERY_MINUTES * 60_000) return false;
+    await tx.query(
+      `insert into lastro.integration_state (key, value, updated_at) values ('last_upkeep_at', to_jsonb(now()), now())
+       on conflict (key) do update set value = excluded.value, updated_at = now()`,
+    );
+    return true;
+  });
+  if (!due) return false;
+  await billingUpkeep().catch(() => centralisLog("warn", "billing upkeep failed"));
+  if (config.enabled) await continueInitialSync(db, config).catch(() => centralisLog("warn", "initial sync step failed"));
+  return true;
+}
+
+/** One bounded drain (scheduler / operator): billing upkeep, a step of the initial sync, then delivery rounds of 50 events (≤ 1,000). */
 export async function drainOutbox(rounds = 20) {
   const config = centralisConfig();
   const billing = await billingUpkeep().catch(() => {
@@ -46,21 +73,25 @@ export async function drainOutbox(rounds = 20) {
 }
 
 /**
- * Delivers queued events after the response is sent. Never awaited by the request, never
- * throws into it: a slow or offline Centralis cannot affect what the user is doing.
+ * After a request: deliver what is queued (claiming skips rows another worker holds, so
+ * concurrent requests never wait on each other), then upkeep only if it is due. Never awaited
+ * by the request, never throws into it: a slow or offline Centralis or database cannot affect
+ * what the user is doing.
  */
 export function scheduleDrain() {
-  if (!centralisConfig().enabled) return;
   try {
     after(async () => {
+      const config = centralisConfig();
       try {
-        await drainOutbox(1);
+        const db = await getDb();
+        if (config.enabled) await flushOutbox(db, config, createCentralisClient(config), 50);
+        await upkeepIfDue(db, config);
       } catch {
         centralisLog("warn", "background drain failed");
       }
     });
   } catch {
-    /* outside a request scope — the cron flush will pick it up */
+    /* outside a request scope — the scheduled flush picks it up */
   }
 }
 

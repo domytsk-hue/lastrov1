@@ -13,6 +13,16 @@ export const dynamic = "force-dynamic";
  * (httpOnly cookies) and records page views and affiliate landings (?ref=CODE).
  */
 export async function POST(req: Request) {
+  try {
+    return await track(req);
+  } catch (e) {
+    // Analytics is best effort: a busy database loses one page view, never the page.
+    console.warn(JSON.stringify({ scope: "tracking", level: "warn", message: "page view not recorded", reason: e instanceof Error ? e.message.slice(0, 160) : "unknown" }));
+    return new NextResponse(null, { status: 204, headers: { "cache-control": "no-store" } });
+  }
+}
+
+async function track(req: Request) {
   const body = await readJson(req, 4 * 1024);
   const config = centralisConfig();
   const db = await getDb();
