@@ -96,7 +96,8 @@ export async function POST(req: Request) {
       orderId: order.id,
       plan: { id: plan.id, name: plan.name, amountMinor: plan.amount_minor, currency: plan.currency, billing: plan.billing },
       method,
-      customer: billing ? { userId: user.id, ...billing.value } : null,
+      // The account's phone goes along when the form didn't ask for it (anti-fraud signal; gateway only).
+      customer: billing ? { userId: user.id, ...billing.value, phone: billing.value.phone ?? user.phone ?? null } : null,
       card,
       // The address this site is really served on (e.g. with www): gateways send their
       // notifications there and many don't follow a redirect from another host.

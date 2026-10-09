@@ -81,7 +81,7 @@ export interface CheckoutRequest {
    * Card payments: the single-use token the gateway's own script made in the browser from the
    * card typed in its secure fields. Never the card number or CVV — those don't reach Lastro.
    */
-  card?: { token: string; paymentMethodId: string; issuerId: string | null } | null;
+  card?: { token: string; paymentMethodId: string; issuerId: string | null; deviceId?: string | null } | null;
   /** Where the gateway sends the buyer back. The page only ASKS the server for the status. */
   returnUrl: string;
 }

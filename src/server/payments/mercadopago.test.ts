@@ -110,7 +110,9 @@ test("registry: Pix and card each have their own gateway; a missing one just isn
 });
 
 test("mercadopago: only a well-formed card token is accepted — never card data", () => {
-  assert.deepEqual(parseCardInput(CARD), { token: CARD.token, paymentMethodId: "master", issuerId: "24" });
+  assert.deepEqual(parseCardInput(CARD), { token: CARD.token, paymentMethodId: "master", issuerId: "24", deviceId: null });
+  assert.equal(parseCardInput({ ...CARD, device_id: "armor.1a2b3c4d5e6f7a8b9c0d" })?.deviceId, "armor.1a2b3c4d5e6f7a8b9c0d");
+  assert.equal(parseCardInput({ ...CARD, device_id: "<script>" })?.deviceId, null);
   assert.equal(parseCardInput({ ...CARD, token: "5031 4332 1540 6351" }), null);
   assert.equal(parseCardInput({ ...CARD, payment_method_id: "<script>" }), null);
   assert.equal(parseCardInput({ ...CARD, issuer_id: "x" }), null);
@@ -316,4 +318,26 @@ test("mercadopago Pix: a 4xx or a Pix without code is an error, never a fake cha
   const noCode = createMercadoPagoProvider(mercadoPagoConfig(env()) as MercadoPagoConfig, (async () => new Response(JSON.stringify({ id: 5, status: "pending" }), { status: 201 })) as typeof fetch);
   await assert.rejects(noCode.createCheckout(req), /without id or code/);
   await assert.rejects(createMercadoPagoProvider(mercadoPagoConfig(env()) as MercadoPagoConfig, fakeApi().impl).createCheckout({ ...req, customer: null }), /e-mail required/);
+});
+
+test("mercadopago: anti-fraud signals — device id header and buyer details go with the card charge", async () => {
+  const db = await freshDb();
+  const c = testConfig();
+  const u = await newUser(db, c);
+  const { api, p } = setup();
+  const r = await createOrder(db, c, { userId: u, planId: "mensal", method: "card", idempotencyKey: `k_${randomUUID()}`, visitorId: null, provider: p });
+  if (!r.ok) throw new Error(r.error);
+  await p.createCheckout({
+    orderId: r.order.id,
+    plan: { id: "mensal", name: "Mensal", amountMinor: 1990, currency: "BRL", billing: "monthly" },
+    method: "card",
+    customer: { userId: u, name: "Maria Souza Lima", email: "maria@exemplo.com", phone: "+5511987654321", document: "52998224725" },
+    card: parseCardInput({ ...CARD, device_id: "armor.1a2b3c4d5e6f7a8b9c0d" }),
+    returnUrl: "",
+  });
+  const call = api.calls[0];
+  assert.equal(call.headers.get("x-meli-session-id"), "armor.1a2b3c4d5e6f7a8b9c0d");
+  const info = call.body?.additional_info as { payer: unknown; items: { category_id: string }[] };
+  assert.deepEqual(info.payer, { first_name: "Maria", last_name: "Souza Lima", phone: { area_code: "11", number: "987654321" } });
+  assert.equal(info.items[0].category_id, "services");
 });

@@ -68,6 +68,12 @@ const STATUS: Record<string, PaymentEventType> = {
 /** How long a Pix code is valid (Mercado Pago accepts 30 minutes to 30 days). */
 export const PIX_MINUTES = 31;
 
+/** "+5511987654321" → { area_code: "11", number: "987654321" } (Mercado Pago's payer phone). */
+const phoneOf = (e164: string | null | undefined) => {
+  const d = (e164 ?? "").replace(/\D/g, "").replace(/^55/, "");
+  return d.length >= 10 ? { area_code: d.slice(0, 2), number: d.slice(2) } : undefined;
+};
+
 /** A Date as Mercado Pago wants it: ISO with the Brasília offset, e.g. 2026-10-09T15:30:00.000-03:00. */
 const brtIso = (d: Date) => new Date(d.getTime() - 3 * 3_600_000).toISOString().replace("Z", "-03:00");
 
@@ -121,10 +127,12 @@ export function parseCardInput(v: unknown): CheckoutRequest["card"] {
   const token = str(c.token);
   const paymentMethodId = str(c.payment_method_id);
   const issuerId = str(c.issuer_id) ?? null;
+  // Mercado Pago's device fingerprint (security.js): a strong signal for its anti-fraud review.
+  const device = str(c.device_id);
   if (!token || !/^[A-Za-z0-9]{16,64}$/.test(token)) return null;
   if (!paymentMethodId || !/^[a-z_]{2,30}$/.test(paymentMethodId)) return null;
   if (issuerId !== null && !/^\d{1,12}$/.test(issuerId)) return null;
-  return { token, paymentMethodId, issuerId };
+  return { token, paymentMethodId, issuerId, deviceId: device && /^[A-Za-z0-9_.:-]{8,200}$/.test(device) ? device : null };
 }
 
 /**
@@ -184,7 +192,10 @@ export function createMercadoPagoProvider(config: MercadoPagoConfig, fetchImpl: 
         last_name: rest.join(" ") || undefined,
         identification: c.document ? { type: "CPF", number: c.document } : undefined,
       },
-      additional_info: { items: [{ id: req.plan.id, title: `Lastro — ${req.plan.name}`, quantity: 1, unit_price: req.plan.amountMinor / 100 }] },
+      additional_info: {
+        items: [{ id: req.plan.id, title: `Lastro — ${req.plan.name}`, description: "Assinatura do aplicativo Lastro", category_id: "services", quantity: 1, unit_price: req.plan.amountMinor / 100 }],
+        payer: { first_name: firstName || undefined, last_name: rest.join(" ") || undefined, phone: phoneOf(c.phone) },
+      },
     };
     // One Pix per order: a retry after a timeout returns the same charge.
     const idempotencyKey = createHash("sha256").update(`${req.orderId}:pix`).digest("hex").slice(0, 64);
@@ -231,15 +242,27 @@ export function createMercadoPagoProvider(config: MercadoPagoConfig, fetchImpl: 
           last_name: rest.join(" ") || undefined,
           identification: c?.document ? { type: "CPF", number: c.document } : undefined,
         },
-        additional_info: { items: [{ id: req.plan.id, title: `Lastro — ${req.plan.name}`, quantity: 1, unit_price: req.plan.amountMinor / 100 }] },
+        additional_info: {
+          items: [{ id: req.plan.id, title: `Lastro — ${req.plan.name}`, description: "Assinatura do aplicativo Lastro", category_id: "services", quantity: 1, unit_price: req.plan.amountMinor / 100 }],
+          // More about the buyer = better odds with Mercado Pago's anti-fraud review.
+          payer: { first_name: firstName || undefined, last_name: rest.join(" ") || undefined, phone: phoneOf(c?.phone) },
+        },
       };
       // One key per order AND card token: a retry of the same attempt can't charge twice, and a
       // new card (new token) after a refusal is a new attempt.
       const idempotencyKey = createHash("sha256").update(`${req.orderId}:${req.card.token}`).digest("hex").slice(0, 64);
-      const r = await call("/v1/payments", { method: "POST", body: JSON.stringify(payload), headers: { "X-Idempotency-Key": idempotencyKey } });
+      const r = await call("/v1/payments", {
+        method: "POST",
+        body: JSON.stringify(payload),
+        headers: { "X-Idempotency-Key": idempotencyKey, ...(req.card.deviceId ? { "X-meli-session-id": req.card.deviceId } : {}) },
+      });
       if (r.status !== 200 && r.status !== 201) throw new Error(`mercadopago: create payment answered ${r.status} ${gatewayReason(r.body)}`);
       const id = str(r.body.id);
       if (!id) throw new Error("mercadopago: payment without id");
+      if (str(r.body.status) === "rejected") {
+        // For the server log: why (e.g. cc_rejected_high_risk = anti-fraud). No card data.
+        console.warn(JSON.stringify({ scope: "payments", level: "warn", message: "card refused", provider: "mercadopago", order_id: req.orderId, status_detail: str(r.body.status_detail) ?? null, device_id_sent: !!req.card.deviceId }));
+      }
       // Approved, refused or in analysis: the page asks the server, which asks Mercado Pago.
       return { providerCheckoutId: id, providerPaymentId: id, instructions: { kind: "awaiting" } };
     },

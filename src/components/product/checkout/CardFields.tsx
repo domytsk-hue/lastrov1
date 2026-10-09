@@ -13,6 +13,8 @@ import { TextField } from "@/components/auth/AuthScreen";
  */
 
 const SDK_URL = "https://sdk.mercadopago.com/js/v2";
+/** Mercado Pago's device fingerprint for its anti-fraud review (sets window.MP_DEVICE_SESSION_ID). */
+const SECURITY_URL = "https://www.mercadopago.com/v2/security.js";
 
 /* Only the parts of MercadoPago.js this page uses. */
 interface MpField {
@@ -30,6 +32,7 @@ interface MpInstance {
 }
 declare global {
   interface Window {
+    MP_DEVICE_SESSION_ID?: string;
     MercadoPago?: new (publicKey: string, opts?: { locale?: string }) => MpInstance;
   }
 }
@@ -55,6 +58,16 @@ export interface CardToken {
   token: string;
   payment_method_id: string;
   issuer_id: string | null;
+  device_id: string | null;
+}
+
+function loadSecurity() {
+  if (document.querySelector(`script[src="${SECURITY_URL}"]`)) return;
+  const s = document.createElement("script");
+  s.src = SECURITY_URL;
+  s.async = true;
+  s.setAttribute("view", "checkout");
+  document.head.appendChild(s);
 }
 
 export interface CardFieldsHandle {
@@ -86,6 +99,7 @@ export const CardFields = forwardRef<CardFieldsHandle, { publicKey: string; subm
   useEffect(() => {
     let alive = true;
     const mounted: MpField[] = [];
+    loadSecurity();
     loadSdk()
       .then(() => {
         if (!alive || !window.MercadoPago) return;
@@ -143,7 +157,7 @@ export const CardFields = forwardRef<CardFieldsHandle, { publicKey: string; subm
         const list = await instance.getIssuers({ paymentMethodId: method.id, bin: b }).catch(() => []);
         issuer = list[0]?.id != null ? String(list[0].id) : null;
       }
-      return { token: token.id, payment_method_id: method.id, issuer_id: issuer };
+      return { token: token.id, payment_method_id: method.id, issuer_id: issuer, device_id: window.MP_DEVICE_SESSION_ID ?? null };
     },
   }));
 
