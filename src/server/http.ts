@@ -6,6 +6,8 @@ export const COOKIES = {
   session: "lastro_session",
   visitor: "lastro_vid",
   visitorSession: "lastro_sid",
+  /** The affiliate code of the last ?ref= landing and when it happened ("CODE.epochMs"), set by the middleware. */
+  ref: "lastro_ref",
 } as const;
 
 const base = { httpOnly: true, sameSite: "lax" as const, path: "/", secure: process.env.NODE_ENV === "production" };

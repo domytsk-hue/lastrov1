@@ -175,6 +175,21 @@ exercises the whole flow in isolated environments only. Centralis receives the g
 plan catalog (`src/config/plans.ts`), never from the browser. Checkout, plan access, the
 paywall switch and the gateway checklist are in [`payments.md`](payments.md).
 
+
+### Attribution that doesn't get lost
+
+- **Landing.** A `?ref=CODE` (or `/r/CODE`) landing is remembered by the server at once, in the
+  httpOnly cookie `lastro_ref` (`CODE.epochMs`, set by `src/middleware.ts`). The page's tracker
+  also reports it (retried, keepalive). If the tracker never got through (blocked, offline,
+  busy server), sign-up, login and checkout record the click from the cookie, dated when it
+  happened (`src/server/tracking/recover.ts`). A newer recorded click wins (last click).
+- **Payment.** The affiliate credited is, in order: the buyer's newest valid click; else the
+  attribution recorded on the order when the checkout opened; else the affiliate the account
+  signed up through, within that affiliate's window from sign-up. Only active affiliates.
+- **Delivery.** `purchase` carries the buyer's allowlisted profile (name, e-mail, phone) and
+  the affiliate code, so Centralis has the customer even if their sign-up event never arrived.
+  Transient delivery failures are retried for ~10 days (`MAX_ATTEMPTS` 45, backoff capped at 6 h).
+
 ## Affiliate area
 
 `GET /api/me/affiliate` and `/api/me/affiliate/stats` resolve the affiliate from the session

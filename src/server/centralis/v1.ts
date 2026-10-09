@@ -136,7 +136,8 @@ export function toCentralisV1(e: Envelope): CentralisV1Event {
       return clean({
         ...base,
         type: "purchase",
-        user: clean({ id: str(obj(e.user).external_user_id) as string, plan: str(o.plan_id) }),
+        // The buyer's allowlisted profile (name, e-mail, phone) when known; the plan just bought.
+        user: clean({ ...(fullUser(obj(e.user)) ?? { id: str(obj(e.user).external_user_id) as string }), plan: str(o.plan_id) }),
         data: clean({
           order_id: str(o.external_charge_id) ?? str(o.external_order_id),
           lastro_order_id: str(o.external_order_id),

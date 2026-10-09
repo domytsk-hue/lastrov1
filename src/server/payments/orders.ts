@@ -2,8 +2,9 @@ import { randomUUID } from "node:crypto";
 import type { Db } from "../db/index.ts";
 import type { CentralisConfig } from "../env.ts";
 import { enqueue } from "../centralis/outbox.ts";
-import { createUserSync } from "../centralis/user-sync.ts";
-import { latestValidAttribution } from "../tracking/attribution.ts";
+import { createUserSync, loadCentralisUser } from "../centralis/user-sync.ts";
+import { serializeUserForCentralis } from "../centralis/serialize.ts";
+import { purchaseAttribution } from "../tracking/attribution.ts";
 import { HOLDINGS, getAccess, grantForCharge, refreshUserPlan, revokeForCharge } from "../access/entitlements.ts";
 import { PLANS, isPlanId, type PlanDefinition } from "../../config/plans.ts";
 import type { PaymentEvent } from "./provider.ts";
@@ -38,6 +39,8 @@ interface Order {
   provider: string;
   visitor_id: string | null;
   purpose: "new" | "upgrade";
+  /** Attribution recorded when the checkout opened (a fallback at payment time). */
+  affiliate_id?: string | null;
 }
 
 interface Charge {
@@ -93,8 +96,11 @@ async function openReview(
 /* ------------------------------- purchase payloads ------------------------------- */
 
 async function purchaseBody(db: Db, charge: Charge, order: Order, plan: Plan, paidAt: Date) {
+  // The buyer in full (the same allowlisted shape as sign-up: no CPF, no secrets), so Centralis
+  // has the customer even if their sign-up event never reached it.
+  const buyer = await loadCentralisUser(db, order.user_id);
   return {
-    user: { external_user_id: order.user_id },
+    user: buyer ? serializeUserForCentralis(buyer) : { external_user_id: order.user_id },
     visitor_id: order.visitor_id,
     order: {
       external_order_id: order.id,
@@ -238,7 +244,7 @@ async function approveInitial(db: Db, config: CentralisConfig, provider: string,
   const before = await getAccess(db, order.user_id, ev.occurredAt, HOLDINGS);
 
   // Attribution is decided at payment time: last valid click for this buyer, if any.
-  const attribution = await latestValidAttribution(db, { userId: order.user_id, visitorId: order.visitor_id }, ev.occurredAt);
+  const attribution = await purchaseAttribution(db, { userId: order.user_id, visitorId: order.visitor_id, orderAffiliateId: order.affiliate_id ?? null }, ev.occurredAt);
 
   let subscriptionId: string | null = null;
   if (plan.billing === "monthly" && ev.providerSubscriptionId) {

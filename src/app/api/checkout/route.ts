@@ -3,11 +3,12 @@ import { centralisConfig, siteUrl } from "@/server/env.ts";
 import { getAccess } from "@/server/access/entitlements.ts";
 import { currentUser, NO_STORE } from "@/server/access/viewer.ts";
 import { scheduleDrain } from "@/server/centralis/runtime.ts";
-import { COOKIES, readCookie, readJson } from "@/server/http.ts";
+import { readJson } from "@/server/http.ts";
 import { attachCheckout, billingFieldsOf, createOrder, validateBilling } from "@/server/payments/checkout.ts";
 import { parseCardInput } from "@/server/payments/mercadopago.ts";
 import type { PaymentMethod } from "@/server/payments/provider.ts";
 import { checkoutProviders, providerForMethod } from "@/server/payments/registry.ts";
+import { recoverAffiliateLanding } from "@/server/tracking/recover.ts";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -74,12 +75,14 @@ export async function POST(req: Request) {
   if (method === "card" && provider.publicKey && !card) return json({ ok: false, error: "invalid_card" }, 422);
 
   const config = centralisConfig();
+  // The order records who referred the buyer (a fallback when the payment is confirmed).
+  const visitorId = await recoverAffiliateLanding(db, config, user.id);
   const created = await createOrder(db, config, {
     userId: user.id,
     planId: typeof body.plan_id === "string" ? body.plan_id : "",
     method,
     idempotencyKey: typeof body.idempotency_key === "string" ? body.idempotency_key : "",
-    visitorId: await readCookie(COOKIES.visitor),
+    visitorId,
     provider,
   });
   if (!created.ok) return json({ ok: false, error: created.error }, created.error === "plan_not_found" ? 404 : created.error === "invalid_method" ? 422 : 409);

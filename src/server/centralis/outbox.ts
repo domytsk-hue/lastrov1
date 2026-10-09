@@ -43,7 +43,8 @@ export type EventType =
 /** Analytics noise is only recorded while the integration is on; everything else always is. */
 const ANALYTICS: EventType[] = ["page_view", "session.started"];
 
-export const MAX_ATTEMPTS = 12;
+/** ~10 days of retries (backoff capped at 6 h): an outage on either side never loses an event. */
+export const MAX_ATTEMPTS = 45;
 const LOCK_TIMEOUT = "5 minutes";
 
 /** 30s, 2m, 8m, 32m, 2h8m, then capped at 6h. */

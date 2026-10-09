@@ -35,3 +35,33 @@ export async function linkVisitorToUser(db: Db, visitorId: string | null, userId
   await db.query(`update lastro.visitors set user_id = $2, last_seen_at = now() where id = $1 and (user_id is null or user_id = $2)`, [visitorId, userId]);
   await db.query(`update lastro.attributions set user_id = $2 where visitor_id = $1 and user_id is null`, [visitorId, userId]);
 }
+
+/**
+ * Who gets the credit for a purchase. Never "no affiliate" when there is a trace of one:
+ *   1. the newest valid click of this buyer (last click, within the affiliate's window);
+ *   2. the attribution recorded on the order when its checkout opened;
+ *   3. the affiliate the account signed up through, within that affiliate's window from sign-up.
+ * Only active affiliates are credited.
+ */
+export async function purchaseAttribution(
+  db: Db,
+  who: { userId: string; visitorId: string | null; orderAffiliateId: string | null },
+  at: Date = new Date(),
+): Promise<{ affiliate_id: string; code: string; centralis_affiliate_id: string } | null> {
+  const click = await latestValidAttribution(db, { userId: who.userId, visitorId: who.visitorId }, at);
+  if (click) return click;
+  if (who.orderAffiliateId) {
+    const [o] = await db.query<{ affiliate_id: string; code: string; centralis_affiliate_id: string }>(
+      `select id as affiliate_id, code, centralis_affiliate_id from lastro.affiliates where id = $1 and status = 'active'`,
+      [who.orderAffiliateId],
+    );
+    if (o) return o;
+  }
+  const [s] = await db.query<{ affiliate_id: string; code: string; centralis_affiliate_id: string }>(
+    `select f.id as affiliate_id, f.code, f.centralis_affiliate_id
+       from lastro.users u join lastro.affiliates f on f.id = u.referred_by_affiliate_id
+      where u.id = $1 and f.status = 'active' and u.created_at + make_interval(days => f.attribution_window_days) > $2`,
+    [who.userId, at],
+  );
+  return s ?? null;
+}
