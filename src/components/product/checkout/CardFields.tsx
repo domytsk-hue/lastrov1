@@ -33,6 +33,7 @@ interface MpInstance {
 declare global {
   interface Window {
     MP_DEVICE_SESSION_ID?: string;
+    deviceId?: string;
     MercadoPago?: new (publicKey: string, opts?: { locale?: string }) => MpInstance;
   }
 }
@@ -59,6 +60,16 @@ export interface CardToken {
   payment_method_id: string;
   issuer_id: string | null;
   device_id: string | null;
+}
+
+/** The device id from Mercado Pago's security script; waits briefly if it is still computing. */
+async function deviceId(): Promise<string | null> {
+  for (let i = 0; i < 20; i++) {
+    const id = window.MP_DEVICE_SESSION_ID || window.deviceId;
+    if (typeof id === "string" && id) return id;
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  return null;
 }
 
 function loadSecurity() {
@@ -157,7 +168,7 @@ export const CardFields = forwardRef<CardFieldsHandle, { publicKey: string; subm
         const list = await instance.getIssuers({ paymentMethodId: method.id, bin: b }).catch(() => []);
         issuer = list[0]?.id != null ? String(list[0].id) : null;
       }
-      return { token: token.id, payment_method_id: method.id, issuer_id: issuer, device_id: window.MP_DEVICE_SESSION_ID ?? null };
+      return { token: token.id, payment_method_id: method.id, issuer_id: issuer, device_id: await deviceId() };
     },
   }));
 

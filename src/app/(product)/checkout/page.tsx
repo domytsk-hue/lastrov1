@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
+import Script from "next/script";
 import { viewerAccess } from "@/server/access/viewer.ts";
 import { CheckoutScreen } from "@/components/product/checkout/CheckoutScreen";
 import { AUTH_ROUTES, CHECKOUT_ROUTE } from "@/config/routes";
@@ -17,5 +18,12 @@ export default async function Page({ searchParams }: { searchParams: Promise<Rec
   const pedido = typeof params.pedido === "string" && /^[0-9a-f-]{36}$/i.test(params.pedido) ? params.pedido : null;
   const viewer = await viewerAccess();
   if (!viewer) redirect(`${AUTH_ROUTES.cadastro}?next=${encodeURIComponent(CHECKOUT_ROUTE)}${plano ? `&plano=${plano}` : ""}`);
-  return <CheckoutScreen initialPlan={plano} orderId={pedido} />;
+  return (
+    <>
+      {/* Mercado Pago's device fingerprint, started as soon as the checkout opens (its anti-fraud
+          review weighs it heavily); the card form also loads it if this one was skipped. */}
+      <Script id="mp-security" src="https://www.mercadopago.com/v2/security.js" strategy="afterInteractive" {...{ view: "checkout" }} />
+      <CheckoutScreen initialPlan={plano} orderId={pedido} />
+    </>
+  );
 }
