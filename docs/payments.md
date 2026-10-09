@@ -13,7 +13,7 @@ profile card and the server all read it.
 | id | Name | Price | Billing |
 |---|---|---|---|
 | `mensal` | Mensal | 1990 centavos (R$ 19,90) | monthly |
-| `vitalicio` | Vitalício | 9990 centavos (R$ 99,90) | one time |
+| `vitalicio` | Vitalício | 7990 centavos (R$ 79,90) | one time |
 
 The ids are the ones Centralis already receives. `lastro.plans` keeps a matching row per plan
 so orders can reference it. A test fails if the rows and the catalog disagree.
@@ -123,7 +123,7 @@ the product now?". The two are separate.
   
   The subscription is only marked as "won't renew" after the gateway confirms. Until then the
   profile says the cancellation is in progress.
-- **No credit or discount.** The lifetime costs R$ 99,90.
+- **No credit or discount.** The lifetime costs R$ 79,90.
 
 ## Duplicates, ordering, reconciliation
 

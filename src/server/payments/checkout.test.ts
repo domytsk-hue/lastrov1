@@ -21,7 +21,7 @@ const approve = (orderId: string, over: Record<string, unknown> = {}) => ({
   type: "payment.approved" as const,
   orderId,
   transactionId: `tx_${randomUUID()}`,
-  amountMinor: 9990,
+  amountMinor: 7990,
   currency: "BRL",
   occurredAt: new Date(),
   ...over,
@@ -29,10 +29,10 @@ const approve = (orderId: string, over: Record<string, unknown> = {}) => ({
 
 /* ------------------------------------ catalog ------------------------------------ */
 
-test("plans: one catalog — R$ 19,90/mês and R$ 99,90 único — and the database rows match it", async () => {
+test("plans: one catalog — R$ 19,90/mês and R$ 79,90 único — and the database rows match it", async () => {
   const db = await freshDb();
   assert.equal(PLANS.mensal.amountMinor, 1990);
-  assert.equal(PLANS.vitalicio.amountMinor, 9990);
+  assert.equal(PLANS.vitalicio.amountMinor, 7990);
   const rows = await db.query<{ id: string; amount_minor: number; currency: string; billing: string }>(`select id, amount_minor, currency, billing from lastro.plans order by id`);
   assert.deepEqual(
     rows.map((r) => [r.id, r.amount_minor, r.currency, r.billing]),
@@ -177,7 +177,7 @@ test("out of order: a refund that overtakes its payment is not recorded and wait
   const config = testConfig();
   const u = await newUser(db, config);
   const { orderId } = await openOrder(db, config, u, "vitalicio");
-  const refund = { providerEventId: "evt_refund", type: "payment.refunded" as const, refundedTransactionId: "tx_late", amountMinor: 9990, currency: "BRL", occurredAt: new Date() };
+  const refund = { providerEventId: "evt_refund", type: "payment.refunded" as const, refundedTransactionId: "tx_late", amountMinor: 7990, currency: "BRL", occurredAt: new Date() };
   await assert.rejects(handlePaymentEvent(db, config, "sandbox", refund), RetryLater);
   assert.equal((await db.query(`select 1 from lastro.processed_webhooks where provider_event_id = 'evt_refund'`)).length, 0);
 
@@ -326,7 +326,7 @@ test("order status: only the owner sees it; a server-side query to the gateway c
   assert.equal((await orderStatus(db, config, a, orderId, provider))?.status, "pending");
   assert.equal((await access(db, a)).active, false);
 
-  provider.state.payments.set("sbx_pay_1", { id: "q1", type: "payment.approved", order_id: orderId, transaction_id: "tx_q", amount_minor: 9990, currency: "BRL" });
+  provider.state.payments.set("sbx_pay_1", { id: "q1", type: "payment.approved", order_id: orderId, transaction_id: "tx_q", amount_minor: 7990, currency: "BRL" });
   assert.equal((await orderStatus(db, config, a, orderId, provider))?.status, "approved");
   assert.equal((await access(db, a)).active, true);
   // The webhook for the same transaction arrives later: nothing doubles.
@@ -379,7 +379,7 @@ test("Centralis: link → sign-up → pay later → return within the window →
   const [purchase] = await outbox(db, "purchase");
   const v1 = toCentralisV1(purchase.payload as unknown as Envelope);
   assert.equal(v1.type, "purchase");
-  assert.equal(v1.data?.amount, 99.9); // never 9990
+  assert.equal(v1.data?.amount, 79.9); // never 7990
   assert.equal(v1.data?.currency, "BRL");
   assert.equal(v1.data?.affiliate_code, "JOAO");
   assert.equal(v1.data?.plan, "vitalicio");

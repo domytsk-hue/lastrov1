@@ -46,7 +46,7 @@ function notify(p: PaymentProvider, orderId: string, body: Record<string, unknow
   const url = new URL(`https://www.lastrofinance.com.br/api/payments/webhook/simplify?order=${orderId}&token=${token}`);
   return p.parseWebhook(JSON.stringify(body), new Headers(), url);
 }
-const paid = (orderId: string, txId: string, amount = "99.90") => ({ event: "deposit.paid", internal_id: txId, external_id: orderId, status: "approved", amount, timestamp: new Date().toISOString() });
+const paid = (orderId: string, txId: string, amount = "79.90") => ({ event: "deposit.paid", internal_id: txId, external_id: orderId, status: "approved", amount, timestamp: new Date().toISOString() });
 const access = (db: Db, u: string) => getAccess(db, u, new Date(), HOLDINGS);
 
 test("simplify: only configured with client id, client secret and a long webhook secret", () => {
@@ -72,7 +72,7 @@ test("simplify: the deposit uses the catalog price, our order id and a per-order
   assert.equal(call.path, "/api/v1/pix/deposit");
   assert.equal(call.headers.get("client-id"), "cid_test");
   assert.deepEqual(call.body.payer, { name: "Maria Souza", email: "maria@exemplo.com", document: "52998224725", phone: "11987654321" });
-  assert.equal(call.body.amount, 99.9);
+  assert.equal(call.body.amount, 79.9);
   assert.equal(call.body.external_id, orderId);
   assert.equal(call.body.webhookURL, `https://www.lastrofinance.com.br/api/payments/webhook/simplify?order=${orderId}&token=${webhookToken(WSECRET, orderId)}`);
   assert.ok(!JSON.stringify(call.body).includes("csecret_test"));
@@ -87,7 +87,7 @@ test("simplify: the deposit uses the catalog price, our order id and a per-order
 });
 
 test("simplify: a deposit answered for another order or amount, or a 4xx, is an error — never a fake charge", async () => {
-  const req = (orderId: string) => ({ orderId, plan: { id: "vitalicio", name: "Vitalício", amountMinor: 9990, currency: "BRL", billing: "one_time" as const }, method: "pix" as const, customer: CUSTOMER("u"), returnUrl: "https://x.test/checkout" });
+  const req = (orderId: string) => ({ orderId, plan: { id: "vitalicio", name: "Vitalício", amountMinor: 7990, currency: "BRL", billing: "one_time" as const }, method: "pix" as const, customer: CUSTOMER("u"), returnUrl: "https://x.test/checkout" });
   await assert.rejects(provider(fakeApi(() => ({ external_id: "other" })).impl).createCheckout(req(randomUUID())), /another order/);
   await assert.rejects(provider(fakeApi(() => ({ amount: "1.00" })).impl).createCheckout(req(randomUUID())), /another amount/);
   await assert.rejects(provider(fakeApi(() => ({ qrcode: null })).impl).createCheckout(req(randomUUID())), /Pix code/);
@@ -156,11 +156,11 @@ test("simplify: tolerant of the notification's shape — nested, form-encoded, n
   const p = provider(fakeApi().impl);
   const a = await checkout(db, c, p, await newUser(db, c));
   const url = (order: string) => new URL(`https://x.test/api/payments/webhook/simplify?order=${order}&token=${webhookToken(WSECRET, order)}`);
-  const nested = await p.parseWebhook(JSON.stringify({ event: "deposit.paid", data: { internal_id: a.txId, external_id: a.orderId, status: "approved", amount: "99.90" } }), new Headers(), url(a.orderId));
-  assert.deepEqual([nested?.[0].type, nested?.[0].amountMinor], ["payment.approved", 9990]);
+  const nested = await p.parseWebhook(JSON.stringify({ event: "deposit.paid", data: { internal_id: a.txId, external_id: a.orderId, status: "approved", amount: "79.90" } }), new Headers(), url(a.orderId));
+  assert.deepEqual([nested?.[0].type, nested?.[0].amountMinor], ["payment.approved", 7990]);
   const form = await p.parseWebhook(`event=deposit.paid&internal_id=${a.txId}&status=approved&amount=99.90`, new Headers(), url(a.orderId));
   assert.deepEqual([form?.[0].type, form?.[0].orderId], ["payment.approved", a.orderId]);
-  assert.equal(await p.parseWebhook(JSON.stringify({ event: "deposit.paid", internal_id: a.txId, external_id: randomUUID(), status: "approved", amount: "99.90" }), new Headers(), url(a.orderId)), null);
+  assert.equal(await p.parseWebhook(JSON.stringify({ event: "deposit.paid", internal_id: a.txId, external_id: randomUUID(), status: "approved", amount: "79.90" }), new Headers(), url(a.orderId)), null);
 });
 
 test("manual confirmation: only this order's own charge id and exact amount; never for a gateway Lastro can query", async () => {

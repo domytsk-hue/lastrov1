@@ -41,9 +41,9 @@ function assertCentralisValid(e: CentralisV1Event) {
 }
 
 test("money is converted from minor to major units without float drift", () => {
-  assert.equal(toMajor(9990), 99.9);
+  assert.equal(toMajor(9990), 99.9); // pure conversion, any amount
   assert.equal(toMajor(1990), 19.9);
-  assert.equal(toMajor(29970), 299.7);
+  assert.equal(toMajor(23970), 239.7);
   assert.equal(toMajor(1), 0.01);
   assert.equal(toMajor(undefined), undefined);
 });
@@ -63,7 +63,7 @@ test("every event of a full flow maps to a valid Centralis v1 event", async () =
   await handlePaymentEvent(db, config, "sandbox", { providerEventId: "rn", type: "subscription.renewed", providerSubscriptionId: sub.provider_subscription_id, transactionId: "tx_rn", amountMinor: 1990, currency: "BRL", occurredAt: new Date() });
   await handlePaymentEvent(db, config, "sandbox", { providerEventId: "f", type: "payment.failed", providerSubscriptionId: sub.provider_subscription_id, occurredAt: new Date() });
   await handlePaymentEvent(db, config, "sandbox", { providerEventId: "c", type: "subscription.cancelled", providerSubscriptionId: sub.provider_subscription_id, occurredAt: new Date() });
-  await handlePaymentEvent(db, config, "sandbox", { providerEventId: "r", type: "payment.refunded", refundedTransactionId: transactionId, amountMinor: 9990, currency: "BRL", occurredAt: new Date() });
+  await handlePaymentEvent(db, config, "sandbox", { providerEventId: "r", type: "payment.refunded", refundedTransactionId: transactionId, amountMinor: 7990, currency: "BRL", occurredAt: new Date() });
   await handleCentralisAction(db, config, JSON.stringify(action(config, "affiliate.suspend", { centralis_affiliate_id: promoted.body.result?.centralis_affiliate_id })));
 
   const all = (await outbox(db)).map((e) => toCentralisV1(e.payload as unknown as Envelope));
@@ -75,7 +75,7 @@ test("every event of a full flow maps to a valid Centralis v1 event", async () =
 
   const purchases = all.filter((e) => e.type === "purchase");
   const first = purchases.find((p) => p.user?.id === maria)!;
-  assert.deepEqual([first.data?.amount, first.data?.currency, first.data?.affiliate_code, first.data?.plan], [99.9, "BRL", "JOAO", "vitalicio"]);
+  assert.deepEqual([first.data?.amount, first.data?.currency, first.data?.affiliate_code, first.data?.plan], [79.9, "BRL", "JOAO", "vitalicio"]);
   const renewal = purchases.find((p) => p.data?.kind === "renewal")!;
   assert.equal(renewal.data?.amount, 19.9);
   assert.ok(renewal.data?.subscription_id, "renewal links to its subscription");

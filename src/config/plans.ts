@@ -17,7 +17,7 @@ export interface PlanDefinition {
   amountMinor: number;
   currency: "BRL";
   billing: "monthly" | "one_time";
-  /** How the price is said everywhere: "R$ 19,90 por mês" / "R$ 99,90 em pagamento único". */
+  /** How the price is said everywhere: "R$ 19,90 por mês" / "R$ 79,90 em pagamento único". */
   priceLabel: string;
   /** Short nature of the charge, for summaries. */
   billingLabel: string;
@@ -36,10 +36,10 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
   vitalicio: {
     id: "vitalicio",
     name: "Vitalício",
-    amountMinor: 9990,
+    amountMinor: 7990,
     currency: "BRL",
     billing: "one_time",
-    priceLabel: "R$ 99,90 em pagamento único",
+    priceLabel: "R$ 79,90 em pagamento único",
     billingLabel: "Pagamento único · acesso para sempre",
   },
 };

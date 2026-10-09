@@ -108,7 +108,7 @@ test("mercadopago: only a well-formed card token is accepted — never card data
 });
 
 test("mercadopago: statuses map conservatively (authorized or in analysis is not money)", () => {
-  const ev = (status: string) => paymentEvent({ id: 1, status, transaction_amount: 99.9, currency_id: "BRL" }).type;
+  const ev = (status: string) => paymentEvent({ id: 1, status, transaction_amount: 79.9, currency_id: "BRL" }).type;
   assert.deepEqual(["approved", "in_process", "authorized", "rejected", "refunded", "charged_back", "in_mediation"].map(ev), ["payment.approved", "payment.pending", "payment.pending", "payment.failed", "payment.refunded", "payment.refunded", "unhandled"]);
   const e = paymentEvent({ id: 7, status: "approved", transaction_amount: 19.9, currency_id: "brl", external_reference: "not-a-uuid" });
   assert.deepEqual([e.amountMinor, e.currency, e.orderId], [1990, "BRL", undefined]);
@@ -124,7 +124,7 @@ test("mercadopago: the charge uses the catalog price, the card token and our ord
   const { orderId, result } = await pay(db, c, p, u);
   const call = api.calls[0];
   assert.deepEqual([call.method, call.path], ["POST", "/v1/payments"]);
-  assert.equal(call.body?.transaction_amount, 99.9);
+  assert.equal(call.body?.transaction_amount, 79.9);
   assert.equal(call.body?.token, CARD.token);
   assert.equal(call.body?.installments, 1);
   assert.equal(call.body?.external_reference, orderId);
@@ -134,7 +134,7 @@ test("mercadopago: the charge uses the catalog price, the card token and our ord
   // Nothing card-like or secret is stored on the order.
   const [row] = await db.query<{ payment_instructions: unknown }>(`select payment_instructions from lastro.orders where id = $1`, [orderId]);
   assert.deepEqual(row.payment_instructions, { kind: "awaiting" });
-  await assert.rejects(p.createCheckout({ orderId, plan: { id: "vitalicio", name: "", amountMinor: 9990, currency: "BRL", billing: "one_time" }, method: "card", customer: null, card: null, returnUrl: "" }));
+  await assert.rejects(p.createCheckout({ orderId, plan: { id: "vitalicio", name: "", amountMinor: 7990, currency: "BRL", billing: "one_time" }, method: "card", customer: null, card: null, returnUrl: "" }));
 });
 
 test("mercadopago: an approved card is confirmed by asking Mercado Pago, once — page and webhook alike", async () => {
