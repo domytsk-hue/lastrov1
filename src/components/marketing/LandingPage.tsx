@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { DailyDemo } from "./DailyDemo";
 import { FinancialFragmentation } from "./FinancialFragmentation";
 import { FinalCTA, PricingSection, ProductComparison, Testimonials, TrustSection } from "./Closing";
@@ -14,24 +15,21 @@ import { BudgetShowcase, EducationMoment, GoalShowcase, InvestmentShowcase, NetW
  *   "Quero testar."          → comparison, trust, plans, final CTA
  */
 export function LandingPage() {
+  // Each section below the hero is its own Suspense boundary: React hydrates them one by one,
+  // yielding to taps in between (and hydrating first whatever the visitor touches), instead of
+  // blocking a slow phone for the whole page at once. The HTML is the same.
+  const sections = [
+    FinancialFragmentation, MonthStory, LastroOrbitShowcase, DailyDemo, BudgetShowcase, ReserveShowcase, GoalShowcase,
+    NetWorthShowcase, InvestmentShowcase, EducationMoment, ProductComparison, Testimonials, TrustSection, PricingSection, FinalCTA,
+  ];
   return (
     <>
       <Hero />
-      <FinancialFragmentation />
-      <MonthStory />
-      <LastroOrbitShowcase />
-      <DailyDemo />
-      <BudgetShowcase />
-      <ReserveShowcase />
-      <GoalShowcase />
-      <NetWorthShowcase />
-      <InvestmentShowcase />
-      <EducationMoment />
-      <ProductComparison />
-      <Testimonials />
-      <TrustSection />
-      <PricingSection />
-      <FinalCTA />
+      {sections.map((Section, i) => (
+        <Suspense key={i}>
+          <Section />
+        </Suspense>
+      ))}
     </>
   );
 }

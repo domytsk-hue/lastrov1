@@ -88,7 +88,7 @@ export function MarketingNav() {
             className="pointer-events-auto absolute inset-x-3 top-[76px] rounded-[32px] bg-white/95 p-3 shadow-[0_30px_60px_-24px_rgba(22,80,180,0.55)] backdrop-blur-xl lg:hidden"
             initial={{ opacity: 0, y: -10, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -8, scale: 0.98 }}
+            exit={{ opacity: 0, y: -8, scale: 0.98, transition: { duration: 0.14 } }}
             transition={spring.snappy}
           >
             <ul className="flex flex-col">

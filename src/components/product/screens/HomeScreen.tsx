@@ -7,13 +7,13 @@ import { GoalShelf, Greeting, NetWorthStory, RecentMoves } from "@/components/pr
 import { InsightStory } from "@/components/product/home/InsightStory";
 import { LastroOrbit } from "@/components/product/home/LastroOrbit";
 import { PulseCard } from "@/components/product/home/PulseCard";
-import { STAGGER, spring } from "@/design-system/motion";
+import { STAGGER, ease } from "@/design-system/motion";
 
-/** Entrance: greeting 0ms → hero 80 → state 160 → orbit 240 → pulse 320 → insight 400. */
+/** Entrance: short and quick — every block visible within ~0.4 s, even on a slow phone. */
 function Enter({ step, children, className }: { step: number; children: React.ReactNode; className?: string }) {
   const reduce = useReducedMotion();
   return (
-    <motion.div className={className} initial={reduce ? false : { opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ ...spring.soft, delay: step * STAGGER }}>
+    <motion.div className={className} initial={reduce ? false : { opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.22, ease: ease.out, delay: step * (STAGGER / 2) }}>
       {children}
     </motion.div>
   );

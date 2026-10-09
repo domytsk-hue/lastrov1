@@ -49,6 +49,8 @@ export function AuthLayoutShell({ children }: { children: React.ReactNode }) {
     };
   }, [session, router, signOut]);
 
-  if (session !== null) return <LastroLoader />;
+  // The form shows at once (also while the saved session is still being read): only someone
+  // actually signed in sees the loader while being sent on.
+  if (session) return <LastroLoader />;
   return <>{children}</>;
 }

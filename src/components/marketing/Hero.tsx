@@ -14,6 +14,19 @@ import { PrimaryCta, SecondaryLink, BalanceSurface } from "./ui";
 /** Entrance timeline (seconds): nav 0 · headline .1 · copy .2 · CTA .3 · product .45 · orbit .6 · objects .75+ */
 const T = { headline: 0.1, copy: 0.2, cta: 0.3, product: 0.45, orbit: 0.6, objects: 0.75 };
 
+/**
+ * The headline, copy and buttons are visible from the very first paint (no fade-in waiting
+ * for JavaScript): on a slow phone that is the difference between a blank page and a site.
+ * They only settle a few pixels into place.
+ */
+function settle(delay: number, reduce: boolean | null) {
+  return {
+    initial: reduce ? false : { y: 10 },
+    animate: { y: 0 },
+    transition: { duration: 0.6, ease: ease.out, delay },
+  } as const;
+}
+
 function enter(delay: number, reduce: boolean | null, from: { y?: number; scale?: number } = { y: 18 }) {
   return {
     initial: reduce ? false : { opacity: 0, y: from.y ?? 0, scale: from.scale ?? 1 },
@@ -29,20 +42,20 @@ export function Hero() {
       <div className="mx-auto max-w-[1160px] text-center">
         <motion.h1
           id="hero-title"
-          {...enter(T.headline, reduce)}
+          {...settle(T.headline, reduce)}
           className="mx-auto font-display text-[clamp(44px,6.6vw,88px)] leading-[0.98] font-semibold tracking-[-0.045em] text-balance text-ink-900"
         >
           Veja sua vida financeira <br className="hidden md:block" />
           ganhar forma.
         </motion.h1>
-        <motion.p {...enter(T.copy, reduce)} className="mx-auto mt-6 max-w-[34ch] text-[clamp(18px,1.9vw,22px)] leading-snug text-pretty text-ink-700">
+        <motion.p {...settle(T.copy, reduce)} className="mx-auto mt-6 max-w-[34ch] text-[clamp(18px,1.9vw,22px)] leading-snug text-pretty text-ink-700">
           Do gasto de hoje ao patrimônio de amanhã. Tudo conectado, simples e visual.
         </motion.p>
-        <motion.div {...enter(T.cta, reduce)} className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
+        <motion.div {...settle(T.cta, reduce)} className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
           <PrimaryCta />
           <SecondaryLink href="#produto">Conhecer o Lastro</SecondaryLink>
         </motion.div>
-        <motion.p {...enter(T.cta + 0.1, reduce)} className="mt-5 text-[14px] text-ink-500">
+        <motion.p {...settle(T.cta + 0.1, reduce)} className="mt-5 text-[14px] text-ink-500">
           Conta criada em menos de um minuto · Sem cartão de crédito
         </motion.p>
       </div>

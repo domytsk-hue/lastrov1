@@ -45,7 +45,14 @@ export function MilestoneHost() {
   return (
     <AnimatePresence>
       {goal && current && (
-        <motion.div className="fixed inset-0 z-[70] grid place-items-center bg-[#0b2350]/40 p-6 backdrop-blur-md" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={close}>
+        <motion.div
+          className="fixed inset-0 z-[70] grid place-items-center bg-[#0b2350]/45 p-6 lg:bg-[#0b2350]/40 lg:backdrop-blur-md"
+          initial={{ opacity: 0, pointerEvents: "auto" }}
+          animate={{ opacity: 1, pointerEvents: "auto" }}
+          // Closing frees the screen at once and fades quickly.
+          exit={{ opacity: 0, pointerEvents: "none", transition: { duration: 0.16 } }}
+          onClick={close}
+        >
           <motion.div
             role="dialog"
             aria-modal="true"
@@ -54,7 +61,7 @@ export function MilestoneHost() {
             className="relative w-full max-w-sm overflow-hidden rounded-[44px] bg-gradient-to-b from-white to-[#EAF6FF] p-8 text-center text-ink-900 shadow-[0_40px_90px_-30px_rgba(7,26,59,0.6)]"
             initial={reduce ? { opacity: 0 } : { scale: 0.92, y: 20, opacity: 0 }}
             animate={{ scale: 1, y: 0, opacity: 1 }}
-            exit={{ scale: 0.96, opacity: 0 }}
+            exit={{ scale: 0.96, opacity: 0, transition: { duration: 0.16 } }}
             transition={{ type: "spring", stiffness: 300, damping: 28 }}
           >
             <div className="pointer-events-none absolute -top-24 left-1/2 size-64 -translate-x-1/2 rounded-full blur-3xl" style={{ background: `${goal.color}33` }} />

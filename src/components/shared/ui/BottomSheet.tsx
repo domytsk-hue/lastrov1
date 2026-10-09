@@ -80,12 +80,20 @@ export function BottomSheet({
   return createPortal(
     <AnimatePresence>
       {open && (
-        <div className="fixed inset-0 z-[60] flex items-end justify-center lg:items-center">
+        // While closing, the layer stops catching taps at once: the page is usable again
+        // immediately, even as the sheet finishes sliding away.
+        <motion.div
+          className="fixed inset-0 z-[60] flex items-end justify-center lg:items-center"
+          initial={{ pointerEvents: "auto" }}
+          animate={{ pointerEvents: "auto" }}
+          exit={{ pointerEvents: "none", transition: { duration: 0 } }}
+        >
           <motion.div
-            className="absolute inset-0 bg-[#0b2350]/30 backdrop-blur-md"
+            // A full-screen blur is costly on phones: a plain dim there, the blur on desktop.
+            className="absolute inset-0 bg-[#0b2350]/35 lg:bg-[#0b2350]/30 lg:backdrop-blur-md"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
+            exit={{ opacity: 0, transition: tween("fast") }}
             transition={tween("normal")}
             onClick={onClose}
             aria-hidden
@@ -104,7 +112,8 @@ export function BottomSheet({
             )}
             initial={reduce ? { opacity: 0 } : { y: "105%" }}
             animate={reduce ? { opacity: 1 } : { y: 0 }}
-            exit={reduce ? { opacity: 0 } : { y: "105%" }}
+            // Opening keeps the spring; closing is a short ease-in so it never feels slow.
+            exit={reduce ? { opacity: 0, transition: tween("fast") } : { y: "105%", transition: { duration: 0.2, ease: [0.4, 0, 1, 1] } }}
             transition={spring.sheet}
             drag={reduce ? false : "y"}
             dragControls={drag}
@@ -146,7 +155,7 @@ export function BottomSheet({
             )}
             <div className={cn("min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 pb-[max(24px,var(--safe-bottom))]", hideTitle ? "pt-1" : "pt-5")}>{children}</div>
           </motion.div>
-        </div>
+        </motion.div>
       )}
     </AnimatePresence>,
     document.body,
