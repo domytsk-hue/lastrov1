@@ -56,7 +56,7 @@ test("every event of a full flow maps to a valid Centralis v1 event", async () =
   const b = await browser(db, config);
   await landWithRef(db, config, b, "JOAO");
   await enqueue(db, config, "page_view", { visitor_id: b.visitorId, session_id: b.sessionId, page: "/" });
-  const maria = await newUser(db, config, "Maria", "(11) 98765-4321", b.visitorId);
+  const maria = await newUser(db, config, "Maria", "maria@exemplo.com", b.visitorId, "(11) 98765-4321");
   const { transactionId } = await buy(db, config, maria, { visitorId: b.visitorId });
   await buy(db, config, joao, { plan: "mensal" });
   const [sub] = await db.query<{ provider_subscription_id: string }>(`select provider_subscription_id from lastro.subscriptions`);
@@ -82,7 +82,7 @@ test("every event of a full flow maps to a valid Centralis v1 event", async () =
   const refund = all.find((e) => e.type === "refund")!;
   assert.equal(refund.data?.order_id, first.data?.order_id, "refund points at the purchase's order_id");
   const signup = all.find((e) => e.type === "signup" && e.user?.id === maria)!;
-  assert.deepEqual([signup.user?.email, signup.user?.phone, signup.data?.affiliate_code, signup.visitor_id], [undefined, "+5511987654321", "JOAO", b.visitorId]);
+  assert.deepEqual([signup.user?.email, signup.user?.phone, signup.data?.affiliate_code, signup.visitor_id], ["maria@exemplo.com", "+5511987654321", "JOAO", b.visitorId]);
   const click = all.find((e) => e.type === "affiliate_click")!;
   assert.deepEqual([click.data?.code, click.visitor_id, click.page?.path, click.utm?.source], ["JOAO", b.visitorId, "/", "instagram"]);
 });

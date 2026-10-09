@@ -1,5 +1,5 @@
 import { createHash, randomBytes, randomUUID } from "node:crypto";
-import { hashPassword, parseIdentifier, PBKDF2_ITERATIONS, randomSalt, safeEqual, validateName, validatePassword, type Identifier, type Result } from "../../auth/rules.ts";
+import { hashPassword, parseEmailAddress, parseIdentifier, parsePhoneNumber, PBKDF2_ITERATIONS, randomSalt, safeEqual, validateName, validatePassword, type Identifier, type Result } from "../../auth/rules.ts";
 import type { Db } from "../db/index.ts";
 import type { CentralisConfig } from "../env.ts";
 import { enqueue } from "../centralis/outbox.ts";
@@ -76,19 +76,24 @@ export interface RequestContext {
 export async function signUp(
   db: Db,
   config: CentralisConfig,
-  input: { name: unknown; identifier: unknown; password: unknown },
+  input: { name: unknown; email: unknown; phone: unknown; password: unknown },
   ctx: RequestContext,
 ): Promise<Result<{ session: ClientSession; token: string; expires: Date }>> {
   const n = validateName(String(input.name ?? ""));
   if (!n.ok) return n;
-  const id = parseIdentifier(String(input.identifier ?? ""));
-  if (!id.ok) return id;
+  // A new account always has both: e-mail and phone (either one signs in later).
+  const email = parseEmailAddress(String(input.email ?? ""));
+  if (!email.ok) return email;
+  const phone = parsePhoneNumber(String(input.phone ?? ""));
+  if (!phone.ok) return phone;
   const password = String(input.password ?? "");
   const pw = validatePassword(password);
   if (!pw.ok) return pw;
 
-  const taken = id.value.kind === "email" ? "Já existe uma conta com esse e-mail. Que tal entrar?" : "Já existe uma conta com esse telefone. Que tal entrar?";
-  if (await findByIdentifier(db, id.value)) return { ok: false, error: taken };
+  const emailTaken = "Já existe uma conta com esse e-mail. Que tal entrar?";
+  const phoneTaken = "Já existe uma conta com esse telefone. Que tal entrar?";
+  if (await findByIdentifier(db, { kind: "email", value: email.value })) return { ok: false, error: emailTaken };
+  if (await findByIdentifier(db, { kind: "phone", value: phone.value })) return { ok: false, error: phoneTaken };
 
   const salt = randomSalt();
   const hash = await hashPassword(password, salt);
@@ -100,7 +105,7 @@ export async function signUp(
       const [u] = await tx.query<UserRow>(
         `insert into lastro.users (id, name, email, phone, password_hash, password_salt, password_iterations, referred_by_affiliate_id)
          values ($1, $2, $3, $4, $5, $6, $7, $8) returning *`,
-        [userId, n.value, id.value.kind === "email" ? id.value.value : null, id.value.kind === "phone" ? id.value.value : null, hash, salt, PBKDF2_ITERATIONS, attribution?.affiliate_id ?? null],
+        [userId, n.value, email.value, phone.value, hash, salt, PBKDF2_ITERATIONS, attribution?.affiliate_id ?? null],
       );
       await linkVisitorToUser(tx, ctx.visitorId, u.id);
       await createUserSync(config).created(tx, u.id);
@@ -115,8 +120,8 @@ export async function signUp(
       return { ok: true as const, value: { session: toClientSession(u), ...s } };
     });
   } catch (e) {
-    // Two sign-ups racing for the same identifier: the unique index decides.
-    if (e instanceof Error && /unique|duplicate/i.test(e.message)) return { ok: false, error: taken };
+    // Two sign-ups racing for the same e-mail or phone: the unique index decides.
+    if (e instanceof Error && /unique|duplicate/i.test(e.message)) return { ok: false, error: /phone/i.test(e.message) ? phoneTaken : emailTaken };
     throw e;
   }
 }

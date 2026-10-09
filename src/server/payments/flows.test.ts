@@ -25,11 +25,19 @@ async function joaoAffiliate(db: Awaited<ReturnType<typeof freshDb>>, config = t
 test("accounts: sign up, duplicate rejected, wrong password rejected, session token not stored in clear", async () => {
   const db = await freshDb();
   const config = testConfig();
-  const r = await signUp(db, config, { name: "Maria", identifier: "(11) 98765-4321", password: "senhaForte123" }, { visitorId: null });
+  const r = await signUp(db, config, { name: "Maria", email: "Maria@Exemplo.com", phone: "(11) 98765-4321", password: "senhaForte123" }, { visitorId: null });
   assert.ok(r.ok);
-  assert.equal(r.value.session.identifier.value, "+5511987654321");
-  const dup = await signUp(db, config, { name: "Outra", identifier: "11987654321", password: "senhaForte123" }, { visitorId: null });
-  assert.equal(dup.ok, false);
+  const [row] = await db.query<{ email: string; phone: string }>(`select email, phone from lastro.users where id = $1`, [r.value.session.userId]);
+  assert.deepEqual(row, { email: "maria@exemplo.com", phone: "+5511987654321" });
+  // Both are required, and each one is unique.
+  assert.equal((await signUp(db, config, { name: "Sem Email", email: "", phone: "11912345678", password: "senhaForte123" }, { visitorId: null })).ok, false);
+  assert.equal((await signUp(db, config, { name: "Sem Fone", email: "semfone@exemplo.com", phone: "", password: "senhaForte123" }, { visitorId: null })).ok, false);
+  const dup = await signUp(db, config, { name: "Outra", email: "outra@exemplo.com", phone: "11987654321", password: "senhaForte123" }, { visitorId: null });
+  assert.deepEqual(dup, { ok: false, error: "Já existe uma conta com esse telefone. Que tal entrar?" });
+  const dupEmail = await signUp(db, config, { name: "Outra", email: "maria@exemplo.com", phone: "11912345678", password: "senhaForte123" }, { visitorId: null });
+  assert.deepEqual(dupEmail, { ok: false, error: "Já existe uma conta com esse e-mail. Que tal entrar?" });
+  // Either one signs in.
+  assert.ok((await signIn(db, config, { identifier: "maria@exemplo.com", password: "senhaForte123" }, { visitorId: null })).ok);
   assert.equal((await signIn(db, config, { identifier: "+55 11 98765-4321", password: "errada123" }, { visitorId: null })).ok, false);
   const ok = await signIn(db, config, { identifier: "11987654321", password: "senhaForte123" }, { visitorId: null });
   assert.ok(ok.ok);
@@ -289,7 +297,7 @@ test("no Centralis payload contains CPF, passwords, hashes, salts, tokens or car
   const { joao, centralisId } = await joaoAffiliate(db);
   const b = await browser(db, config);
   await landWithRef(db, config, b, "JOAO");
-  const buyer = await newUser(db, config, "Paula", "(21) 99876-5432", b.visitorId);
+  const buyer = await newUser(db, config, "Paula", "paula@exemplo.com", b.visitorId, "(21) 99876-5432");
   const { transactionId } = await buy(db, config, buyer, { visitorId: b.visitorId });
   await buy(db, config, joao, { plan: "mensal" });
   await handlePaymentEvent(db, config, "sandbox", { providerEventId: "e_r", type: "payment.refunded", refundedTransactionId: transactionId, occurredAt: new Date() });

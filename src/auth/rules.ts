@@ -36,6 +36,26 @@ export function parseIdentifier(raw: string): Result<Identifier> {
   return { ok: true, value: { kind: "phone", value: `+55${digits}` } };
 }
 
+/** The sign-up e-mail (required): lowercase. */
+export function parseEmailAddress(raw: string): Result<string> {
+  const input = raw.trim();
+  if (!input) return { ok: false, error: "Informe seu e-mail." };
+  const r = parseIdentifier(input);
+  if (!r.ok) return r;
+  if (r.value.kind !== "email") return { ok: false, error: "Informe um e-mail válido, ex.: voce@email.com." };
+  return { ok: true, value: r.value.value };
+}
+
+/** The sign-up phone (required): Brazilian, with DDD → +55DDDNUMBER. */
+export function parsePhoneNumber(raw: string): Result<string> {
+  const input = raw.trim();
+  if (!input) return { ok: false, error: "Informe seu celular com DDD." };
+  if (/[a-z@]/i.test(input)) return { ok: false, error: "Use só números, ex.: (11) 98765-4321." };
+  const r = parseIdentifier(input);
+  if (!r.ok) return r;
+  return { ok: true, value: r.value.value };
+}
+
 /** Live mask while typing a phone; leaves anything that looks like an email untouched. */
 export function maskIdentifierInput(raw: string): string {
   if (/[a-z@]/i.test(raw)) {

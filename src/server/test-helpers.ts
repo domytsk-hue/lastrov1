@@ -28,8 +28,11 @@ export function testConfig(over: Partial<CentralisConfig> = {}): CentralisConfig
 
 export const freshDb = () => createPgliteDb();
 
-export async function newUser(db: Db, config: CentralisConfig, name = "João Silva", identifier = `${randomUUID().slice(0, 8)}@exemplo.com`, visitorId: string | null = null) {
-  const r = await signUp(db, config, { name, identifier, password: "senhaForte123" }, { visitorId });
+/** A unique valid mobile number for tests: (11) 9XXXX-XXXX. */
+export const testPhone = () => `119${String(Math.floor(Math.random() * 1e8)).padStart(8, "0")}`;
+
+export async function newUser(db: Db, config: CentralisConfig, name = "João Silva", email = `${randomUUID().slice(0, 8)}@exemplo.com`, visitorId: string | null = null, phone = testPhone()) {
+  const r = await signUp(db, config, { name, email, phone, password: "senhaForte123" }, { visitorId });
   if (!r.ok) throw new Error(r.error);
   return r.value.session.userId;
 }

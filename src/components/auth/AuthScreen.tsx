@@ -5,7 +5,7 @@ import { ArrowRight, AtSign, Check, Eye, EyeOff, Loader2, Lock, Phone, Sparkles,
 import { usePathname, useRouter } from "next/navigation";
 import { useId, useMemo, useState } from "react";
 import { cn } from "@/lib/cn";
-import { firstName, formatIdentifier, maskIdentifierInput, parseIdentifier, passwordChecks, validateName, validatePassword } from "@/auth/rules";
+import { firstName, formatIdentifier, maskIdentifierInput, parseEmailAddress, parseIdentifier, parsePhoneNumber, passwordChecks, validateName, validatePassword } from "@/auth/rules";
 import { useAuth } from "@/auth/auth-store";
 import { AUTH_ROUTES } from "@/config/routes";
 import { LastroMark } from "@/components/shared/brand/LastroMark";
@@ -71,7 +71,7 @@ export function AuthScreen() {
           <AnimatePresence mode="wait" initial={false}>
             <motion.div key={mode} initial={reduce ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.2 }}>
               <h1 className="font-display text-[38px] leading-[1.05] font-semibold tracking-[-0.035em] text-ink-900">{mode === "entrar" ? "Bom te ver de novo." : "Seu progresso começa aqui."}</h1>
-              <p className="mt-2 text-[16px] text-ink-500">{mode === "entrar" ? "Entre com seu e-mail ou telefone." : "Leva menos de um minuto. Só nome, contato e senha."}</p>
+              <p className="mt-2 text-[16px] text-ink-500">{mode === "entrar" ? "Entre com seu e-mail ou telefone." : "Leva menos de um minuto. Só nome, e-mail, celular e senha."}</p>
             </motion.div>
           </AnimatePresence>
 
@@ -120,7 +120,9 @@ function DemoButton() {
 
 /* ---------------- Form ---------------- */
 
-type Field = "name" | "identifier" | "password";
+const errorOf = (r: { ok: boolean; error?: string }) => (r.ok ? null : (r.error ?? null));
+
+type Field = "name" | "identifier" | "email" | "phone" | "password";
 
 function AuthForm({ mode, onSwitch }: { mode: Mode; onSwitch: (m: Mode) => void }) {
   const { signIn, signUp } = useAuth();
@@ -128,9 +130,11 @@ function AuthForm({ mode, onSwitch }: { mode: Mode; onSwitch: (m: Mode) => void 
   const signup = mode === "cadastro";
   const [name, setName] = useState("");
   const [identifier, setIdentifier] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
-  const [touched, setTouched] = useState<Record<Field, boolean>>({ name: false, identifier: false, password: false });
+  const [touched, setTouched] = useState<Record<Field, boolean>>({ name: false, identifier: false, email: false, phone: false, password: false });
   const [submitted, setSubmitted] = useState(false);
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -138,7 +142,10 @@ function AuthForm({ mode, onSwitch }: { mode: Mode; onSwitch: (m: Mode) => void 
   const parsedId = useMemo(() => parseIdentifier(identifier), [identifier]);
   const errors: Record<Field, string | null> = {
     name: signup ? (validateName(name).ok ? null : (validateName(name) as { error: string }).error) : null,
-    identifier: parsedId.ok ? null : parsedId.error,
+    // Sign-in: one field, e-mail or phone. Sign-up: both, separately.
+    identifier: signup ? null : parsedId.ok ? null : parsedId.error,
+    email: signup ? errorOf(parseEmailAddress(email)) : null,
+    phone: signup ? errorOf(parsePhoneNumber(phone)) : null,
     password: signup ? (validatePassword(password).ok ? null : (validatePassword(password) as { error: string }).error) : password ? null : "Informe sua senha.",
   };
   const show = (f: Field) => (submitted || touched[f]) && errors[f];
@@ -149,9 +156,9 @@ function AuthForm({ mode, onSwitch }: { mode: Mode; onSwitch: (m: Mode) => void 
     e.preventDefault();
     setSubmitted(true);
     setFormError(null);
-    if (errors.name || errors.identifier || errors.password) return;
+    if (Object.values(errors).some(Boolean)) return;
     setBusy(true);
-    const r = signup ? await signUp({ name, identifier, password }) : await signIn(identifier, password);
+    const r = signup ? await signUp({ name, email, phone, password }) : await signIn(identifier, password);
     setBusy(false);
     if (!r.ok) {
       setFormError(r.error);
@@ -181,19 +188,46 @@ function AuthForm({ mode, onSwitch }: { mode: Mode; onSwitch: (m: Mode) => void 
           placeholder="Como podemos te chamar?"
         />
       )}
-      <TextField
-        label="E-mail ou telefone"
-        icon={looksLikePhone ? <Phone className="size-[18px]" /> : <AtSign className="size-[18px]" />}
-        value={identifier}
-        onChange={(v) => setIdentifier(maskIdentifierInput(v))}
-        onBlur={blur("identifier")}
-        error={show("identifier")}
-        autoComplete={signup ? "username" : "username"}
-        autoFocus={!signup}
-        inputMode="email"
-        placeholder="voce@email.com ou (11) 98765-4321"
-        hint={parsedId.ok ? `${parsedId.value.kind === "email" ? "E-mail" : "Telefone"}: ${formatIdentifier(parsedId.value)}` : undefined}
-      />
+      {signup ? (
+        <>
+          <TextField
+            label="E-mail"
+            icon={<AtSign className="size-[18px]" />}
+            value={email}
+            onChange={setEmail}
+            onBlur={blur("email")}
+            error={show("email")}
+            autoComplete="email"
+            inputMode="email"
+            placeholder="voce@email.com"
+          />
+          <TextField
+            label="Celular"
+            icon={<Phone className="size-[18px]" />}
+            value={phone}
+            onChange={(v) => setPhone(maskIdentifierInput(v.replace(/[a-z@]/gi, "")))}
+            onBlur={blur("phone")}
+            error={show("phone")}
+            autoComplete="tel-national"
+            inputMode="tel"
+            placeholder="(11) 98765-4321"
+          />
+        </>
+      ) : (
+        <TextField
+          label="E-mail ou telefone"
+          icon={looksLikePhone ? <Phone className="size-[18px]" /> : <AtSign className="size-[18px]" />}
+          value={identifier}
+          onChange={(v) => setIdentifier(maskIdentifierInput(v))}
+          onBlur={blur("identifier")}
+          error={show("identifier")}
+          autoComplete={signup ? "username" : "username"}
+          autoFocus={!signup}
+          inputMode="email"
+          placeholder="voce@email.com ou (11) 98765-4321"
+          hint={parsedId.ok ? `${parsedId.value.kind === "email" ? "E-mail" : "Telefone"}: ${formatIdentifier(parsedId.value)}` : undefined}
+        />
+      )}
       <TextField
         label="Senha"
         icon={<Lock className="size-[18px]" />}

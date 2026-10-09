@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
   const body = await readJson(req);
-  const r = await signUp(await getDb(), centralisConfig(), { name: body.name, identifier: body.identifier, password: body.password }, { visitorId: await readCookie(COOKIES.visitor) });
+  const r = await signUp(await getDb(), centralisConfig(), { name: body.name, email: body.email, phone: body.phone, password: body.password }, { visitorId: await readCookie(COOKIES.visitor) });
   if (!r.ok) return NextResponse.json({ ok: false, error: r.error }, { status: 400 });
   await setCookie(COOKIES.session, r.value.token, SESSION_DAYS * 86_400);
   scheduleDrain();

@@ -22,7 +22,9 @@ export interface Session {
 
 export interface SignUpInput {
   name: string;
-  identifier: string;
+  /** Both are required for a new account; either one signs in later. */
+  email: string;
+  phone: string;
   password: string;
 }
 
@@ -64,10 +66,11 @@ const toSession = (u: StoredUser): Session => ({ userId: u.id, name: u.name, ide
 const INVALID_CREDENTIALS = "E-mail, telefone ou senha incorretos.";
 
 export const localAuthService: AuthService = {
-  async signUp({ name, identifier, password }) {
+  async signUp({ name, email, password }) {
     const n = validateName(name);
     if (!n.ok) return n;
-    const id = parseIdentifier(identifier);
+    // On-device accounts (tests only) are keyed by the e-mail.
+    const id = parseIdentifier(email);
     if (!id.ok) return id;
     const pw = validatePassword(password);
     if (!pw.ok) return pw;
@@ -137,7 +140,20 @@ function carryOverLocalData(fromUserId: string, toUserId: string) {
 }
 
 export const apiAuthService: AuthService = {
-  signUp: ({ name, identifier, password }) => postAuth("/api/auth/signup", { name, identifier, password }),
+  async signUp({ name, email, phone, password }) {
+    const r = await postAuth("/api/auth/signup", { name, email, phone, password });
+    if (!r.ok) return r;
+    // An old on-device account with this e-mail or phone and this password: bring its data along.
+    for (const raw of [email, phone]) {
+      const id = parseIdentifier(raw);
+      const legacy = id.ok ? readUsers().find((u) => u.identifier.value === id.value.value) : undefined;
+      if (legacy && (await localAuthService.signIn(raw, password)).ok) {
+        carryOverLocalData(legacy.id, r.value.userId);
+        break;
+      }
+    }
+    return r;
+  },
 
   async signIn(identifier, password) {
     const remote = await postAuth("/api/auth/login", { identifier, password });
@@ -151,10 +167,9 @@ export const apiAuthService: AuthService = {
     if (!legacy) return remote;
     const local = await localAuthService.signIn(identifier, password);
     if (!local.ok) return remote;
-    const migrated = await postAuth("/api/auth/signup", { name: legacy.name, identifier, password });
-    if (!migrated.ok) return remote;
-    carryOverLocalData(legacy.id, migrated.value.userId);
-    return migrated;
+    // A new account needs e-mail AND phone: the person creates it once, and this device's
+    // data comes along (see signUp).
+    return { ok: false, error: "Sua conta precisa ser atualizada: toque em “Criar conta” e use seu e-mail, telefone e a mesma senha. Seus dados deste aparelho serão mantidos." };
   },
 
   enterDemo: () => localAuthService.enterDemo(),
