@@ -14,6 +14,7 @@ import type { PaymentProvider } from "./provider.ts";
 const SECRET = "mp_webhook_secret_0123456789abcdef";
 const ENV = { MERCADOPAGO_ACCESS_TOKEN: "APP_USR-test-access", MERCADOPAGO_PUBLIC_KEY: "APP_USR-test-public", MERCADOPAGO_WEBHOOK_SECRET: SECRET };
 const env = (over: Record<string, string> = {}) => ({ ...ENV, ...over }) as unknown as NodeJS.ProcessEnv;
+const PIX_CODE = "00020126580014br.gov.bcb.pix0136mp-pix-test5204000053039865405019.905802BR5913LASTRO6009SAO PAULO62070503***6304ABCD";
 const CARD = { token: "ff8080814c11e237014c1ff593b57b4d", payment_method_id: "master", issuer_id: "24" };
 
 /** A fake Mercado Pago API: card payments answer with the status `nextStatus`. */
@@ -30,7 +31,13 @@ function fakeApi() {
     if (headers.get("authorization") !== `Bearer ${ENV.MERCADOPAGO_ACCESS_TOKEN}`) return new Response("{}", { status: 401 });
     if (init.method === "POST" && url.pathname === "/v1/payments") {
       const id = next++;
-      const p = { id, status: state.nextStatus, status_detail: "accredited", transaction_amount: body.transaction_amount, currency_id: "BRL", external_reference: body.external_reference, payment_type_id: "credit_card", payment_method_id: body.payment_method_id, date_created: new Date().toISOString(), date_approved: new Date().toISOString(), live_mode: true };
+      const pix = body.payment_method_id === "pix";
+      const p = {
+        id, status: pix ? "pending" : state.nextStatus, status_detail: pix ? "pending_waiting_transfer" : "accredited", transaction_amount: body.transaction_amount, currency_id: "BRL",
+        external_reference: body.external_reference, payment_type_id: pix ? "bank_transfer" : "credit_card", payment_method_id: body.payment_method_id,
+        date_created: new Date().toISOString(), date_approved: pix ? null : new Date().toISOString(), live_mode: true,
+        ...(pix ? { date_of_expiration: body.date_of_expiration, point_of_interaction: { transaction_data: { qr_code: PIX_CODE, qr_code_base64: "iVBOR", ticket_url: "https://www.mercadopago.com.br/payments/x" } } } : {}),
+      };
       payments.set(String(id), p);
       return new Response(JSON.stringify(p), { status: 201 });
     }
@@ -84,7 +91,7 @@ test("mercadopago: only configured with access token, public key and webhook sec
   assert.equal(mercadoPagoConfig(env({ MERCADOPAGO_API_URL: "http://api.mercadopago.com" })), null);
   assert.equal(mercadoPagoConfig(env({ MERCADOPAGO_STATEMENT_DESCRIPTOR: "Lastro Finance Ltda!" }))?.statementDescriptor, "Lastro Financ");
   const p = getPaymentProvider("mercadopago", env());
-  assert.deepEqual([p?.id, p?.methods, p?.publicKey, p?.billingFields], ["mercadopago", ["card"], "APP_USR-test-public", ["name", "email", "cpf"]]);
+  assert.deepEqual([p?.id, p?.methods, p?.publicKey, p?.billingFields], ["mercadopago", ["pix", "card"], "APP_USR-test-public", ["name", "email", "cpf"]]);
 });
 
 test("registry: Pix and card each have their own gateway; a missing one just isn't offered", () => {
@@ -92,10 +99,13 @@ test("registry: Pix and card each have their own gateway; a missing one just isn
   assert.equal(providerForMethod("card", both)?.id, "mercadopago");
   assert.equal(providerForMethod("pix", both), null); // Simplify chosen but not configured: Pix isn't offered
   assert.deepEqual(checkoutProviders(both).map((o) => o.method), ["card"]);
+  // Both methods on Mercado Pago.
+  const allMp = env({ PAYMENT_PROVIDER_CARD: "mercadopago", PAYMENT_PROVIDER_PIX: "mercadopago" });
+  assert.deepEqual(checkoutProviders(allMp).map((o) => [o.method, o.provider.id]), [["pix", "mercadopago"], ["card", "mercadopago"]]);
   const configured = env({ PAYMENT_PROVIDER_CARD: "mercadopago", PAYMENT_PROVIDER_PIX: "simplify", SIMPLIFY_CLIENT_ID: "id", SIMPLIFY_CLIENT_SECRET: "secret", SIMPLIFY_WEBHOOK_SECRET: "w".repeat(32) });
   assert.deepEqual(checkoutProviders(configured).map((o) => [o.method, o.provider.id]), [["pix", "simplify"], ["card", "mercadopago"]]);
   // A gateway is never used for a method it doesn't take.
-  assert.equal(providerForMethod("pix", env({ PAYMENT_PROVIDER_PIX: "mercadopago" })), null);
+  assert.equal(providerForMethod("pix", env({ PAYMENT_PROVIDER_PIX: "sandbox" })), null);
   assert.deepEqual(checkoutProviders(env()), []);
 });
 
@@ -229,4 +239,81 @@ test("mercadopago: a refusal is logged with Mercado Pago's reason, never the tok
   assert.ok(err instanceof Error);
   assert.match(err.message, /400 bad_request \| invalid parameters \| 2006 Card Token not found/);
   assert.ok(!err.message.includes(CARD.token));
+});
+
+/* ------------------------------------- Pix ------------------------------------- */
+
+async function payPix(db: Db, c: CentralisConfig, p: PaymentProvider, userId: string, plan = "mensal") {
+  const r = await createOrder(db, c, { userId, planId: plan, method: "pix", idempotencyKey: `k_${randomUUID()}`, visitorId: null, provider: p });
+  if (!r.ok) throw new Error(r.error);
+  const result = await p.createCheckout({
+    orderId: r.order.id,
+    plan: { id: plan, name: plan === "mensal" ? "Mensal" : "Vitalício", amountMinor: r.plan.amount_minor, currency: "BRL", billing: plan === "mensal" ? "monthly" : "one_time" },
+    method: "pix",
+    customer: { userId, name: "Maria Souza Lima", email: "maria@exemplo.com", phone: null, document: "52998224725" },
+    card: null,
+    returnUrl: "",
+  });
+  await attachCheckout(db, r.order.id, result);
+  return { orderId: r.order.id, paymentId: result.providerPaymentId as string, result };
+}
+
+test("mercadopago Pix: a Pix charge with the catalog price, our order id and an expiry; QR drawn from Mercado Pago's code", async () => {
+  const db = await freshDb();
+  const c = testConfig();
+  const u = await newUser(db, c);
+  const { api, p } = setup();
+  const { orderId, result } = await payPix(db, c, p, u);
+  const call = api.calls[0];
+  assert.equal(call.body?.payment_method_id, "pix");
+  assert.equal(call.body?.transaction_amount, 19.9);
+  assert.equal(call.body?.external_reference, orderId);
+  assert.equal(call.body?.token, undefined);
+  assert.deepEqual(call.body?.payer, { email: "maria@exemplo.com", first_name: "Maria", last_name: "Souza Lima", identification: { type: "CPF", number: "52998224725" } });
+  assert.match(String(call.body?.date_of_expiration), /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}-03:00$/);
+  const minutes = (Date.parse(String(call.body?.date_of_expiration)) - Date.now()) / 60_000;
+  assert.ok(minutes > 30 && minutes < 32, `expiry in ${minutes} min`);
+  const pix = result.instructions as { kind: string; copyPaste: string; qrCodeImage: string; expiresAt: string };
+  assert.deepEqual([pix.kind, pix.copyPaste], ["pix", PIX_CODE]);
+  assert.ok(pix.qrCodeImage.startsWith("data:image/svg+xml;base64,"));
+  assert.ok(Date.parse(pix.expiresAt) > Date.now());
+});
+
+test("mercadopago Pix: paid → the page's own check confirms it (no webhook needed); the webhook later is a duplicate", async () => {
+  const db = await freshDb();
+  const c = testConfig();
+  const u = await newUser(db, c);
+  const { api, p } = setup();
+  const { orderId, paymentId } = await payPix(db, c, p, u);
+  assert.equal((await orderStatus(db, c, u, orderId, () => p))?.status, "pending");
+  assert.equal((await access(db, u)).state, "none");
+  api.set(paymentId, { status: "approved", status_detail: "accredited", date_approved: new Date().toISOString() });
+  assert.equal((await orderStatus(db, c, u, orderId, () => p))?.status, "approved");
+  assert.equal((await access(db, u)).state, "monthly");
+  assert.equal(await handlePaymentEvent(db, c, "mercadopago", (await deliver(p, signed(paymentId)))![0]), "duplicate");
+  assert.equal((await outbox(db, "purchase")).length, 1);
+});
+
+test("mercadopago Pix: an expired Pix closes the order as expired, nothing released", async () => {
+  const db = await freshDb();
+  const c = testConfig();
+  const u = await newUser(db, c);
+  const { api, p } = setup();
+  const { orderId, paymentId } = await payPix(db, c, p, u);
+  api.set(paymentId, { status: "cancelled", status_detail: "expired" });
+  const [ev] = (await deliver(p, signed(paymentId)))!;
+  assert.equal(ev.type, "payment.expired");
+  assert.equal(await handlePaymentEvent(db, c, "mercadopago", ev), "applied");
+  assert.equal((await orderStatus(db, c, u, orderId, () => p))?.status, "expired");
+  assert.equal((await access(db, u)).state, "none");
+});
+
+test("mercadopago Pix: a 4xx or a Pix without code is an error, never a fake charge", async () => {
+  const req = { orderId: randomUUID(), plan: { id: "mensal", name: "Mensal", amountMinor: 1990, currency: "BRL", billing: "monthly" as const }, method: "pix" as const, customer: { userId: "u", name: "Maria", email: "maria@exemplo.com", phone: null, document: "52998224725" }, card: null, returnUrl: "" };
+  const refusing = createMercadoPagoProvider(mercadoPagoConfig(env()) as MercadoPagoConfig, (async () => new Response(JSON.stringify({ message: "Financial Identity Use Case was not found", error: "bad_request", status: 400, cause: [{ code: 13253, description: "Collector user without key enabled for QR render" }] }), { status: 400 })) as typeof fetch);
+  const err = await refusing.createCheckout(req).catch((e: Error) => e);
+  assert.ok(err instanceof Error && /400 .*13253 Collector user without key enabled/.test(err.message), String(err));
+  const noCode = createMercadoPagoProvider(mercadoPagoConfig(env()) as MercadoPagoConfig, (async () => new Response(JSON.stringify({ id: 5, status: "pending" }), { status: 201 })) as typeof fetch);
+  await assert.rejects(noCode.createCheckout(req), /without id or code/);
+  await assert.rejects(createMercadoPagoProvider(mercadoPagoConfig(env()) as MercadoPagoConfig, fakeApi().impl).createCheckout({ ...req, customer: null }), /e-mail required/);
 });

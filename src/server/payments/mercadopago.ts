@@ -1,11 +1,13 @@
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
+import QRCode from "qrcode";
 import type { CheckoutRequest, CheckoutResult, PaymentEvent, PaymentEventType, PaymentProvider } from "./provider.ts";
 
 /**
- * Mercado Pago adapter — card payments on Lastro's own checkout ("Checkout Transparente").
+ * Mercado Pago adapter — card and Pix on Lastro's own checkout ("Checkout Transparente").
  *
- *   browser: MercadoPago.js secure fields (iframes) → card token          (card data never reaches Lastro)
- *   server:  POST {api}/v1/payments { token, amount from the catalog, external_reference: order id }
+ *   card:  MercadoPago.js secure fields (iframes) → card token          (card data never reaches Lastro)
+ *          POST {api}/v1/payments { token, amount from the catalog, external_reference: order id }
+ *   Pix:   POST {api}/v1/payments { payment_method_id: "pix", amount, payer, expiry } → QR + copy-and-paste
  *   webhook: x-signature (HMAC-SHA256) checked → GET {api}/v1/payments/:id  (status and amount from there)
  *
  * The access token stays on the server. The public key goes to the browser — it can only make
@@ -63,11 +65,18 @@ const STATUS: Record<string, PaymentEventType> = {
   charged_back: "payment.refunded",
 };
 
+/** How long a Pix code is valid (Mercado Pago accepts 30 minutes to 30 days). */
+export const PIX_MINUTES = 31;
+
+/** A Date as Mercado Pago wants it: ISO with the Brasília offset, e.g. 2026-10-09T15:30:00.000-03:00. */
+const brtIso = (d: Date) => new Date(d.getTime() - 3 * 3_600_000).toISOString().replace("Z", "-03:00");
+
 /** A payment as Mercado Pago reports it (GET /v1/payments/:id) → a PaymentEvent. */
 export function paymentEvent(p: Obj): PaymentEvent {
   const id = str(p.id) as string;
   const status = str(p.status)?.toLowerCase() ?? "";
-  const type = STATUS[status] ?? "unhandled";
+  // A Pix that ran out of time comes back as cancelled / expired: nothing was charged.
+  const type = status === "cancelled" && str(p.status_detail)?.toLowerCase() === "expired" ? "payment.expired" : (STATUS[status] ?? "unhandled");
   const ref = str(p.external_reference);
   const kind = str(p.payment_type_id);
   return {
@@ -157,13 +166,53 @@ export function createMercadoPagoProvider(config: MercadoPagoConfig, fetchImpl: 
     return paymentEvent(r.body);
   };
 
+  /** A Pix charge: Mercado Pago returns the copy-and-paste code; Lastro draws the QR from it. */
+  const createPix = async (req: CheckoutRequest): Promise<CheckoutResult> => {
+    const c = req.customer;
+    if (!c?.email) throw new Error("mercadopago: payer e-mail required for Pix");
+    const [firstName, ...rest] = (c.name ?? "").split(" ");
+    const expires = new Date(Date.now() + PIX_MINUTES * 60_000);
+    const payload = {
+      transaction_amount: req.plan.amountMinor / 100, // from the catalog, never from the browser
+      payment_method_id: "pix",
+      description: `Lastro — plano ${req.plan.name}`,
+      external_reference: req.orderId,
+      date_of_expiration: brtIso(expires),
+      payer: {
+        email: c.email,
+        first_name: firstName || undefined,
+        last_name: rest.join(" ") || undefined,
+        identification: c.document ? { type: "CPF", number: c.document } : undefined,
+      },
+      additional_info: { items: [{ id: req.plan.id, title: `Lastro — ${req.plan.name}`, quantity: 1, unit_price: req.plan.amountMinor / 100 }] },
+    };
+    // One Pix per order: a retry after a timeout returns the same charge.
+    const idempotencyKey = createHash("sha256").update(`${req.orderId}:pix`).digest("hex").slice(0, 64);
+    const r = await call("/v1/payments", { method: "POST", body: JSON.stringify(payload), headers: { "X-Idempotency-Key": idempotencyKey } });
+    if (r.status !== 200 && r.status !== 201) throw new Error(`mercadopago: create Pix answered ${r.status} ${gatewayReason(r.body)}`);
+    const id = str(r.body.id);
+    const tx = obj(obj(r.body.point_of_interaction).transaction_data);
+    const copyPaste = str(tx.qr_code);
+    if (!id || !copyPaste) throw new Error("mercadopago: Pix without id or code");
+    if (toMinor(r.body.transaction_amount) !== undefined && toMinor(r.body.transaction_amount) !== req.plan.amountMinor) throw new Error("mercadopago: Pix with another amount");
+    const until = date(r.body.date_of_expiration) ?? expires;
+    const svg = await QRCode.toString(copyPaste, { type: "svg", margin: 1, errorCorrectionLevel: "M" });
+    return {
+      providerCheckoutId: id,
+      providerPaymentId: id,
+      expiresAt: until,
+      instructions: { kind: "pix", copyPaste, qrCodeImage: `data:image/svg+xml;base64,${Buffer.from(svg).toString("base64")}`, expiresAt: until.toISOString() },
+    };
+  };
+
   return {
     id: "mercadopago",
-    methods: ["card"],
+    methods: ["pix", "card"],
     supportsSubscriptions: false,
     billingFields: ["name", "email", "cpf"],
     publicKey: config.publicKey,
     async createCheckout(req: CheckoutRequest): Promise<CheckoutResult> {
+      if (req.method === "pix") return createPix(req);
       if (req.method !== "card" || !req.card) throw new Error("mercadopago: card token required");
       const c = req.customer;
       const [firstName, ...rest] = (c?.name ?? "").split(" ");

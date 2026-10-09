@@ -215,7 +215,7 @@ values (gen_random_uuid(), '<user id>', 'admin', now(), null, '<why>');
 
 | Method | Gateway | Variable | Adapter |
 |---|---|---|---|
-| Pix | Simplify | `PAYMENT_PROVIDER_PIX=simplify` | `src/server/payments/simplify.ts` |
+| Pix | Mercado Pago (or Simplify) | `PAYMENT_PROVIDER_PIX=mercadopago` (or `simplify`) | `mercadopago.ts` / `simplify.ts` |
 | Card | Mercado Pago | `PAYMENT_PROVIDER_CARD=mercadopago` | `src/server/payments/mercadopago.ts` |
 
 `PAYMENT_PROVIDER` sets both at once (e.g. `sandbox` in tests). A method whose gateway is
@@ -223,7 +223,7 @@ missing or not fully configured is simply not offered; with none, payments are u
 Each order stores its gateway, so webhooks, the page's status checks and refunds always go to
 the gateway that charged it.
 
-## Mercado Pago (card)
+## Mercado Pago (card and Pix)
 
 "Checkout Transparente": the card is typed on Lastro's page, into Mercado Pago's **secure
 fields** (Mercado Pago's iframes, styled like Lastro's inputs, `CardFields.tsx`). Mercado Pago
@@ -259,6 +259,11 @@ Mercado Pago webhook ──(x-signature)──► /api/payments/webhook/mercadop
   | `in_mediation`, anything else | `unhandled` → a person looks at it |
 
 - **Amount.** Must equal the plan's price; otherwise review, no access.
+- **Pix.** `POST /v1/payments` with `payment_method_id: "pix"`, the catalog price, the payer
+  (name, e-mail, CPF) and a 31-minute expiry; Lastro shows Mercado Pago's copy-and-paste code
+  and draws the QR from it. The page's own check asks Mercado Pago, so a Pix is confirmed even
+  if the notification is lost. An expired Pix (`cancelled` / `expired`) closes the order.
+  Requires a Pix key registered on the Mercado Pago account.
 - **Monthly.** One card payment = one month (no automatic renewal yet). When the month ends
   the account pays another month, or upgrades to Vitalício.
 

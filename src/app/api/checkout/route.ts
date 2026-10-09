@@ -69,9 +69,9 @@ export async function POST(req: Request) {
   const fields = billingFieldsOf(provider);
   const billing = fields.length ? validateBilling({ name: body.name, cpf: body.cpf, phone: body.phone, email: body.email }, user.email, fields) : null;
   if (billing && !billing.ok) return json({ ok: false, error: "invalid_billing", fields: billing.errors }, 422);
-  // A card gateway with browser tokenization needs the token before anything is stored.
-  const card = provider.publicKey ? parseCardInput(body.card) : null;
-  if (provider.publicKey && !card) return json({ ok: false, error: "invalid_card" }, 422);
+  // Card on a gateway with browser tokenization needs the token before anything is stored.
+  const card = method === "card" && provider.publicKey ? parseCardInput(body.card) : null;
+  if (method === "card" && provider.publicKey && !card) return json({ ok: false, error: "invalid_card" }, 422);
 
   const config = centralisConfig();
   const created = await createOrder(db, config, {
