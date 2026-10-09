@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { ArrowRight, AtSign, Check, Eye, EyeOff, Loader2, Lock, Phone, Sparkles, UserRound } from "lucide-react";
+import { ArrowRight, AtSign, Check, Eye, EyeOff, Loader2, Lock, Phone, UserRound } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { useId, useMemo, useState } from "react";
 import { cn } from "@/lib/cn";
@@ -88,13 +88,6 @@ export function AuthScreen() {
 
           <AuthForm key={mode} mode={mode} onSwitch={setMode} />
 
-          <div className="my-7 flex items-center gap-3 text-[13px] text-ink-400" aria-hidden>
-            <span className="h-px flex-1 bg-ink-900/10" />
-            ou
-            <span className="h-px flex-1 bg-ink-900/10" />
-          </div>
-          <DemoButton />
-
           <p className="mt-8 flex items-start gap-2 text-[13px] leading-relaxed text-ink-500">
             <Lock className="mt-0.5 size-3.5 shrink-0" />
             Sua conta fica protegida nos servidores do Lastro e a senha é guardada de forma criptografada.
@@ -102,19 +95,6 @@ export function AuthScreen() {
         </div>
       </main>
     </div>
-  );
-}
-
-function DemoButton() {
-  const { enterDemo } = useAuth();
-  return (
-    <button
-      onClick={enterDemo}
-      className="flex h-14 w-full items-center justify-center gap-2 rounded-full bg-white/80 text-[15px] font-semibold text-ink-900 shadow-[inset_0_1px_0_#fff,0_10px_24px_-16px_rgba(22,80,180,0.5)] transition-transform active:scale-[0.98]"
-    >
-      <Sparkles className="size-4 text-violet" />
-      Explorar com dados de demonstração
-    </button>
   );
 }
 

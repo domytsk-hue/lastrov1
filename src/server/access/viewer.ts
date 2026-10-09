@@ -16,7 +16,7 @@ export async function currentUser() {
 /**
  * The single server-side answer to "may this request use the paid product?" used by the
  * /app pages. No session cookie → `null`: the client shell sends the person to /login, or
- * it is the on-device demo (which has no server account and only demo data).
+ * the server renders the locked state.
  */
 export async function viewerAccess(): Promise<{ userId: string; access: AccessSummary } | null> {
   if (!(await readCookie(COOKIES.session))) return null;
@@ -36,7 +36,8 @@ export async function viewerAccess(): Promise<{ userId: string; access: AccessSu
 export async function canUsePaidProduct(): Promise<boolean> {
   if (!paywallEnabled()) return true;
   const v = await viewerAccess();
-  return v ? v.access.active : true;
+  // No account, no paid modules (there is no demonstration account any more).
+  return v ? v.access.active : false;
 }
 
 export const NO_STORE = { "cache-control": "private, no-store" } as const;

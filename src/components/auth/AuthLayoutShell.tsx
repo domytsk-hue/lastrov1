@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { useAuth } from "@/auth/auth-store";
 import { CHECKOUT_ROUTE, ROUTES, safeNext } from "@/config/routes";
 import { isPlanId } from "@/config/plans";
@@ -15,22 +15,11 @@ import { LastroLoader } from "@/components/shared/brand/LastroMark";
  * Access comes from the server; this only picks the next screen.
  */
 export function AuthLayoutShell({ children }: { children: React.ReactNode }) {
-  const { session, signOut } = useAuth();
+  const { session } = useAuth();
   const router = useRouter();
-  // Arriving here from the demo (e.g. a plan button on the landing) means "create my account":
-  // the demo is left so the form shows. Choosing the demo ON this page still opens it.
-  const arrived = useRef(false);
 
   useEffect(() => {
-    if (session === undefined) return;
-    const firstLook = !arrived.current;
-    arrived.current = true;
     if (!session) return;
-    if (session.demo) {
-      if (firstLook) signOut();
-      else router.replace(ROUTES.home);
-      return;
-    }
     const params = new URLSearchParams(window.location.search);
     const next = safeNext(params.get("next"));
     const plano = params.get("plano");
@@ -47,7 +36,7 @@ export function AuthLayoutShell({ children }: { children: React.ReactNode }) {
     return () => {
       alive = false;
     };
-  }, [session, router, signOut]);
+  }, [session, router]);
 
   // The form shows at once (also while the saved session is still being read): only someone
   // actually signed in sees the loader while being sent on.

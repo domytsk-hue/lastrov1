@@ -31,8 +31,6 @@ export interface SignUpInput {
 export interface AuthService {
   signUp(input: SignUpInput): Promise<Result<Session>>;
   signIn(identifier: string, password: string): Promise<Result<Session>>;
-  /** Enters the demo account with Lucas' data — no credentials. */
-  enterDemo(): Session;
 }
 
 interface StoredUser {
@@ -107,9 +105,6 @@ export const localAuthService: AuthService = {
     return { ok: true, value: toSession(user) };
   },
 
-  enterDemo() {
-    return { userId: DEMO_USER_ID, name: "Lucas", identifier: null, demo: true };
-  },
 };
 
 /* ------------------------------ server-backed accounts ------------------------------ */
@@ -172,7 +167,6 @@ export const apiAuthService: AuthService = {
     return { ok: false, error: "Sua conta precisa ser atualizada: toque em “Criar conta” e use seu e-mail, telefone e a mesma senha. Seus dados deste aparelho serão mantidos." };
   },
 
-  enterDemo: () => localAuthService.enterDemo(),
 };
 
 interface AuthContextValue {
@@ -180,7 +174,6 @@ interface AuthContextValue {
   session: Session | null | undefined;
   signUp: (input: SignUpInput) => Promise<Result<Session>>;
   signIn: (identifier: string, password: string) => Promise<Result<Session>>;
-  enterDemo: () => void;
   signOut: () => void;
 }
 
@@ -199,8 +192,18 @@ export function AuthProvider({ children, service = apiAuthService }: { children:
     } catch {
       cached = null;
     }
+    // The demonstration account no longer exists: a demo session saved on this device is
+    // discarded (with its sample data), and the person signs in or creates an account.
+    if (cached?.demo) {
+      try {
+        window.localStorage.removeItem(SESSION_KEY);
+        window.localStorage.removeItem(`lastro:state:${DEMO_USER_ID}`);
+      } catch {
+        /* nothing saved to remove */
+      }
+      cached = null;
+    }
     setSession(cached);
-    if (cached?.demo) return;
     let alive = true;
     fetch("/api/auth/session", { credentials: "same-origin", cache: "no-store" })
       .then((r) => (r.ok ? (r.json() as Promise<{ session: Session | null }>) : Promise.reject()))
@@ -250,13 +253,12 @@ export function AuthProvider({ children, service = apiAuthService }: { children:
     [service, persist],
   );
 
-  const enterDemo = useCallback(() => persist(service.enterDemo()), [service, persist]);
   const signOut = useCallback(() => {
     if (session && !session.demo) void fetch("/api/auth/logout", { method: "POST", credentials: "same-origin" }).catch(() => {});
     persist(null);
   }, [persist, session]);
 
-  const value = useMemo(() => ({ session, signUp, signIn, enterDemo, signOut }), [session, signUp, signIn, enterDemo, signOut]);
+  const value = useMemo(() => ({ session, signUp, signIn, signOut }), [session, signUp, signIn, signOut]);
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
