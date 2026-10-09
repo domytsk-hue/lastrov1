@@ -259,6 +259,10 @@ Mercado Pago webhook ──(x-signature)──► /api/payments/webhook/mercadop
   | `in_mediation`, anything else | `unhandled` → a person looks at it |
 
 - **Amount.** Must equal the plan's price; otherwise review, no access.
+- **3-D Secure.** Card charges carry `three_d_secure_mode` (`MERCADOPAGO_3DS`: `optional` by
+  default, `mandatory`, or `off`). When Mercado Pago answers `pending_challenge`, the checkout
+  shows the bank's confirmation in a frame on Lastro's own page (posting `creq` to
+  `three_ds_info.external_resource_url`); the order polling then picks up approval or refusal.
 - **Pix.** `POST /v1/payments` with `payment_method_id: "pix"`, the catalog price, the payer
   (name, e-mail, CPF) and a 31-minute expiry; Lastro shows Mercado Pago's copy-and-paste code
   and draws the QR from it. The page's own check asks Mercado Pago, so a Pix is confirmed even
@@ -378,6 +382,7 @@ Simplify ──POST { event: deposit.paid, internal_id, external_id, status, amo
 | `MERCADOPAGO_ACCESS_TOKEN` | server | Mercado Pago access token (secret) |
 | `MERCADOPAGO_PUBLIC_KEY` | server → browser | public key for the secure card fields |
 | `MERCADOPAGO_WEBHOOK_SECRET` | server | webhook "assinatura secreta" (≥ 16 chars) |
+| `MERCADOPAGO_3DS` | server | optional: `optional` (default), `mandatory` or `off` — 3-D Secure on card charges |
 | `MERCADOPAGO_STATEMENT_DESCRIPTOR` | server | optional, name on the card statement (default `LASTRO`) |
 | `PAYMENT_SANDBOX_SECRET` | dev/test only | sandbox webhook HMAC secret |
 | `CRON_SECRET` | server | the scheduled flush also runs plan expiry and renewal cancellations |

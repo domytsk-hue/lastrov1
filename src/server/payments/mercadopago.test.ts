@@ -22,7 +22,7 @@ function fakeApi() {
   const payments = new Map<string, Record<string, unknown>>();
   const calls: { method: string; path: string; headers: Headers; body: Record<string, unknown> | null }[] = [];
   let next = 1_000_000_001;
-  const state = { nextStatus: "approved" };
+  const state = { nextStatus: "approved", challenge: false };
   const impl = (async (input: string | URL | Request, init: RequestInit = {}) => {
     const url = new URL(String(input));
     const headers = new Headers(init.headers);
@@ -32,6 +32,11 @@ function fakeApi() {
     if (init.method === "POST" && url.pathname === "/v1/payments") {
       const id = next++;
       const pix = body.payment_method_id === "pix";
+      if (!pix && state.challenge && body.three_d_secure_mode) {
+        const p = { id, status: "pending", status_detail: "pending_challenge", transaction_amount: body.transaction_amount, currency_id: "BRL", external_reference: body.external_reference, payment_type_id: "credit_card", three_ds_info: { external_resource_url: "https://acs.banco.example/3ds/challenge", creq: "eyJjcmVxIjoidGVzdCJ9" } };
+        payments.set(String(id), p);
+        return new Response(JSON.stringify(p), { status: 201 });
+      }
       const p = {
         id, status: pix ? "pending" : state.nextStatus, status_detail: pix ? "pending_waiting_transfer" : "accredited", transaction_amount: body.transaction_amount, currency_id: "BRL",
         external_reference: body.external_reference, payment_type_id: pix ? "bank_transfer" : "credit_card", payment_method_id: body.payment_method_id,
@@ -340,4 +345,50 @@ test("mercadopago: anti-fraud signals — device id header and buyer details go 
   const info = call.body?.additional_info as { payer: unknown; items: { category_id: string }[] };
   assert.deepEqual(info.payer, { first_name: "Maria", last_name: "Souza Lima", phone: { area_code: "11", number: "987654321" } });
   assert.equal(info.items[0].category_id, "services");
+});
+
+/* ----------------------------------- 3-D Secure ----------------------------------- */
+
+test("mercadopago 3DS: card charges ask for 3-D Secure (optional by default; configurable; off removes it)", async () => {
+  assert.equal(mercadoPagoConfig(env())?.threeDSecure, "optional");
+  assert.equal(mercadoPagoConfig(env({ MERCADOPAGO_3DS: "mandatory" }))?.threeDSecure, "mandatory");
+  assert.equal(mercadoPagoConfig(env({ MERCADOPAGO_3DS: "off" }))?.threeDSecure, "off");
+  const db = await freshDb();
+  const c = testConfig();
+  const { api, p } = setup();
+  await pay(db, c, p, await newUser(db, c));
+  assert.equal(api.calls[0].body?.three_d_secure_mode, "optional");
+  const off = fakeApi();
+  const pOff = createMercadoPagoProvider(mercadoPagoConfig(env({ MERCADOPAGO_3DS: "off" })) as MercadoPagoConfig, off.impl);
+  await pay(db, c, pOff, await newUser(db, c));
+  assert.equal(off.calls[0].body?.three_d_secure_mode, undefined);
+});
+
+test("mercadopago 3DS: a bank challenge is shown on Lastro's page; after it, Mercado Pago's answer decides", async () => {
+  const db = await freshDb();
+  const c = testConfig();
+  const u = await newUser(db, c);
+  const { api, p } = setup();
+  api.state.challenge = true;
+  const { orderId, paymentId, result } = await pay(db, c, p, u);
+  assert.deepEqual(result.instructions, { kind: "challenge", url: "https://acs.banco.example/3ds/challenge", creq: "eyJjcmVxIjoidGVzdCJ9" });
+  // While the buyer is confirming, nothing is released.
+  assert.equal((await orderStatus(db, c, u, orderId, () => p))?.status, "pending");
+  assert.equal((await access(db, u)).state, "none");
+  // The bank confirmed: Mercado Pago approves it.
+  api.set(paymentId, { status: "approved", status_detail: "accredited", date_approved: new Date().toISOString() });
+  assert.equal((await orderStatus(db, c, u, orderId, () => p))?.status, "approved");
+  assert.equal((await access(db, u)).state, "lifetime");
+});
+
+test("mercadopago 3DS: a challenge the buyer fails is a refusal, nothing released", async () => {
+  const db = await freshDb();
+  const c = testConfig();
+  const u = await newUser(db, c);
+  const { api, p } = setup();
+  api.state.challenge = true;
+  const { orderId, paymentId } = await pay(db, c, p, u);
+  api.set(paymentId, { status: "rejected", status_detail: "cc_rejected_3ds_challenge" });
+  assert.equal((await orderStatus(db, c, u, orderId, () => p))?.status, "failed");
+  assert.equal((await access(db, u)).state, "none");
 });

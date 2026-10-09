@@ -23,6 +23,8 @@ export interface MercadoPagoConfig {
   webhookSecret: string;
   /** Name on the buyer's card statement (up to 13 characters). */
   statementDescriptor: string;
+  /** 3-D Secure for cards: "optional" (Mercado Pago asks the bank when it judges it useful), "mandatory" or "off". */
+  threeDSecure: "optional" | "mandatory" | "off";
 }
 
 /** Mercado Pago is configured only with the access token, the public key and the webhook secret. */
@@ -34,7 +36,9 @@ export function mercadoPagoConfig(env: NodeJS.ProcessEnv = process.env): Mercado
   const apiUrl = (env.MERCADOPAGO_API_URL || "https://api.mercadopago.com").replace(/\/+$/, "");
   if (!apiUrl.startsWith("https://")) return null;
   const statementDescriptor = (env.MERCADOPAGO_STATEMENT_DESCRIPTOR?.trim() || "LASTRO").replace(/[^A-Za-z0-9 ]/g, "").slice(0, 13) || "LASTRO";
-  return { apiUrl, accessToken, publicKey, webhookSecret, statementDescriptor };
+  const tds = env.MERCADOPAGO_3DS?.trim().toLowerCase();
+  const threeDSecure = tds === "mandatory" || tds === "off" ? tds : "optional";
+  return { apiUrl, accessToken, publicKey, webhookSecret, statementDescriptor, threeDSecure };
 }
 
 /* ------------------------------------ parsing ------------------------------------ */
@@ -235,6 +239,9 @@ export function createMercadoPagoProvider(config: MercadoPagoConfig, fetchImpl: 
         installments: 1,
         description: `Lastro — plano ${req.plan.name}`,
         statement_descriptor: config.statementDescriptor,
+        // 3-D Secure: instead of refusing a payment it finds risky, Mercado Pago can ask the
+        // buyer's bank to confirm it with the buyer (the challenge below).
+        ...(config.threeDSecure !== "off" ? { three_d_secure_mode: config.threeDSecure } : {}),
         external_reference: req.orderId,
         payer: {
           email: c?.email ?? undefined,
@@ -262,6 +269,13 @@ export function createMercadoPagoProvider(config: MercadoPagoConfig, fetchImpl: 
       if (str(r.body.status) === "rejected") {
         // For the server log: why (e.g. cc_rejected_high_risk = anti-fraud). No card data.
         console.warn(JSON.stringify({ scope: "payments", level: "warn", message: "card refused", provider: "mercadopago", order_id: req.orderId, status_detail: str(r.body.status_detail) ?? null, device_id_sent: !!req.card.deviceId }));
+      }
+      // The bank wants the buyer to confirm (3-D Secure): the page shows the bank's challenge.
+      const tds = obj(r.body.three_ds_info);
+      const challengeUrl = str(tds.external_resource_url);
+      const creq = str(tds.creq);
+      if (str(r.body.status_detail) === "pending_challenge" && challengeUrl?.startsWith("https://") && creq) {
+        return { providerCheckoutId: id, providerPaymentId: id, instructions: { kind: "challenge", url: challengeUrl, creq } };
       }
       // Approved, refused or in analysis: the page asks the server, which asks Mercado Pago.
       return { providerCheckoutId: id, providerPaymentId: id, instructions: { kind: "awaiting" } };

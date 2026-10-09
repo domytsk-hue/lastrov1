@@ -26,7 +26,11 @@ import { CardFields, type CardFieldsHandle } from "./CardFields";
 
 type Method = "pix" | "card";
 
-type Instructions = { kind: "pix"; copyPaste: string; qrCodeImage: string | null; expiresAt: string | null } | { kind: "redirect"; url: string } | { kind: "awaiting" };
+type Instructions =
+  | { kind: "pix"; copyPaste: string; qrCodeImage: string | null; expiresAt: string | null }
+  | { kind: "redirect"; url: string }
+  | { kind: "awaiting" }
+  | { kind: "challenge"; url: string; creq: string };
 
 interface CheckoutInfo {
   account: { name: string; email: string | null; phone: string | null };
@@ -39,6 +43,7 @@ type Phase =
   | { name: "creating" }
   | { name: "pix"; orderId: string; instructions: Extract<Instructions, { kind: "pix" }> }
   | { name: "processing"; orderId: string }
+  | { name: "challenge"; orderId: string; url: string; creq: string }
   | { name: "confirmed" }
   | { name: "closed"; reason: "failed" | "expired" | "cancelled" };
 
@@ -165,7 +170,9 @@ export function CheckoutScreen({ initialPlan, orderId }: { initialPlan: PlanId |
 
   /* ---------------------------- following an order ---------------------------- */
 
-  const followId = phase.name === "pix" || phase.name === "processing" ? phase.orderId : null;
+  // The order is followed while waiting — including during the bank's confirmation, so its
+  // result shows even if the bank's page never tells this one it finished.
+  const followId = phase.name === "pix" || phase.name === "processing" || phase.name === "challenge" ? phase.orderId : null;
   useEffect(() => {
     if (!followId) return;
     let alive = true;
@@ -255,7 +262,13 @@ export function CheckoutScreen({ initialPlan, orderId }: { initialPlan: PlanId |
         window.location.assign(ins.url);
         return;
       }
-      setPhase(ins.kind === "pix" ? { name: "pix", orderId: data.order_id, instructions: ins } : { name: "processing", orderId: data.order_id });
+      setPhase(
+        ins.kind === "pix"
+          ? { name: "pix", orderId: data.order_id, instructions: ins }
+          : ins.kind === "challenge"
+            ? { name: "challenge", orderId: data.order_id, url: ins.url, creq: ins.creq }
+            : { name: "processing", orderId: data.order_id },
+      );
     } catch {
       setPhase({ name: "form" });
       setFormError(ERRORS.network);
@@ -307,6 +320,15 @@ export function CheckoutScreen({ initialPlan, orderId }: { initialPlan: PlanId |
               <Confirmed key="ok" />
             ) : phase.name === "pix" ? (
               <PixPanel key="pix" amount={amount} plan={chosen.name} instructions={phase.instructions} onChange={() => setPhase({ name: "form" })} />
+            ) : phase.name === "challenge" ? (
+              <BankChallenge
+                key="challenge"
+                url={phase.url}
+                creq={phase.creq}
+                amount={amount}
+                onDone={() => setPhase({ name: "processing", orderId: phase.orderId })}
+                onChange={() => setPhase({ name: "form" })}
+              />
             ) : phase.name === "processing" ? (
               <Waiting key="wait" hosted={hosted} gatewayName={gatewayName} onChange={() => setPhase({ name: "form" })} />
             ) : (
@@ -685,6 +707,48 @@ function PixPanel({ amount, plan, instructions, onChange }: { amount: string; pl
           <ArrowLeft className="size-4" aria-hidden /> Trocar plano ou forma de pagamento
         </button>
       </div>
+    </motion.section>
+  );
+}
+
+/* ------------------------------ bank confirmation (3-D Secure) ------------------------------ */
+
+/**
+ * The card's bank asks the buyer to confirm the purchase (3-D Secure). Its page opens in a frame
+ * here — the buyer never leaves Lastro — by posting Mercado Pago's `creq` to the bank's address.
+ * Approval is detected by the order polling; the bank's "complete" message only skips ahead.
+ */
+function BankChallenge({ url, creq, amount, onDone, onChange }: { url: string; creq: string; amount: string; onDone: () => void; onChange: () => void }) {
+  const reduce = useReducedMotion();
+  const form = useRef<HTMLFormElement>(null);
+  const frameName = `bank-3ds-${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
+  useEffect(() => {
+    form.current?.submit();
+    const onMessage = (e: MessageEvent) => {
+      const d = e.data as { status?: string } | null;
+      if (d && typeof d === "object" && d.status === "COMPLETE") onDone();
+    };
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+    // Posted once, when the challenge opens.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return (
+    <motion.section initial={reduce ? false : { opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="mx-auto flex w-full max-w-[520px] flex-col items-center py-6 text-center" aria-live="polite">
+      <span className="inline-flex items-center gap-2 rounded-full bg-electric/10 px-3 py-1.5 text-[13px] font-semibold text-electric">
+        <ShieldCheck className="size-4" aria-hidden /> Confirmação do seu banco
+      </span>
+      <h1 className="mt-4 font-display text-[28px] leading-tight font-semibold tracking-[-0.03em] text-ink-900">Confirme a compra de {amount}</h1>
+      <p className="mt-2 max-w-[42ch] text-[15px] text-ink-500">Por segurança, o banco do seu cartão pediu uma confirmação. Siga as instruções abaixo — às vezes é preciso aprovar no app do banco.</p>
+      <div className="mt-6 w-full overflow-hidden rounded-[28px] bg-white shadow-[0_18px_40px_-24px_rgba(22,80,180,0.55)]">
+        <iframe name={frameName} title="Confirmação do banco" className="block h-[560px] w-full border-0 bg-white" />
+      </div>
+      <form ref={form} method="post" action={url} target={frameName} className="hidden">
+        <input type="hidden" name="creq" value={creq} />
+      </form>
+      <button type="button" onClick={onChange} className="mt-5 inline-flex h-11 items-center gap-2 rounded-full px-4 text-[14px] font-semibold text-ink-700 hover:bg-ink-900/5">
+        <ArrowLeft className="size-4" aria-hidden /> Voltar e escolher outra forma de pagamento
+      </button>
     </motion.section>
   );
 }

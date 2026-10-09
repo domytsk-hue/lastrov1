@@ -91,7 +91,12 @@ export type PaymentInstructions =
   | { kind: "pix"; copyPaste: string; qrCodeImage: string | null; expiresAt: string | null }
   | { kind: "redirect"; url: string }
   /** The gateway confirms on its own (e.g. card in analysis); the page waits. */
-  | { kind: "awaiting" };
+  | { kind: "awaiting" }
+  /**
+   * 3-D Secure: the card's bank asks the buyer to confirm, inside a frame on Lastro's page
+   * (`url` is the bank's challenge page, `creq` the request it expects). The page then waits.
+   */
+  | { kind: "challenge"; url: string; creq: string };
 
 export interface CheckoutResult {
   providerCheckoutId: string;
