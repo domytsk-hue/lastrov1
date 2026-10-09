@@ -379,6 +379,7 @@ Simplify ──POST { event: deposit.paid, internal_id, external_id, status, amo
 | `SIMPLIFY_WEBHOOK_SECRET` | server | Lastro's own secret (≥ 32 chars) that signs each deposit's webhook URL |
 | `PAYMENT_PROVIDER_CARD` | server | card gateway: `mercadopago` |
 | `PAYMENT_PROVIDER` | server | both methods at once (e.g. `sandbox` in tests) |
+| `CHECKOUT_CARD` | server | `on` offers card in the checkout; anything else pauses it (Pix only) |
 | `MERCADOPAGO_ACCESS_TOKEN` | server | Mercado Pago access token (secret) |
 | `MERCADOPAGO_PUBLIC_KEY` | server → browser | public key for the secure card fields |
 | `MERCADOPAGO_WEBHOOK_SECRET` | server | webhook "assinatura secreta" (≥ 16 chars) |

@@ -44,8 +44,18 @@ export function getPaymentProvider(id: string | null | undefined, env: NodeJS.Pr
   return null;
 }
 
+/**
+ * Card is paused in the checkout for now: only Pix is offered, and a card attempt is refused.
+ * The card gateway stays configured (orders already paid by card, webhooks and refunds keep
+ * working); CHECKOUT_CARD=on brings the option back without touching anything else.
+ */
+export function cardCheckoutEnabled(env: NodeJS.ProcessEnv = process.env): boolean {
+  return env.CHECKOUT_CARD === "on";
+}
+
 /** The gateway that takes `method` in new checkouts, or null when that method isn't offered. */
 export function providerForMethod(method: PaymentMethod, env: NodeJS.ProcessEnv = process.env): PaymentProvider | null {
+  if (method === "card" && !cardCheckoutEnabled(env)) return null;
   const id = (method === "pix" ? env.PAYMENT_PROVIDER_PIX : env.PAYMENT_PROVIDER_CARD) || env.PAYMENT_PROVIDER;
   const p = getPaymentProvider(id, env);
   return p && p.methods.includes(method) ? p : null;

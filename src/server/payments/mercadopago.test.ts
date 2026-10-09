@@ -12,7 +12,7 @@ import { checkoutProviders, getPaymentProvider, providerForMethod } from "./regi
 import type { PaymentProvider } from "./provider.ts";
 
 const SECRET = "mp_webhook_secret_0123456789abcdef";
-const ENV = { MERCADOPAGO_ACCESS_TOKEN: "APP_USR-test-access", MERCADOPAGO_PUBLIC_KEY: "APP_USR-test-public", MERCADOPAGO_WEBHOOK_SECRET: SECRET };
+const ENV = { MERCADOPAGO_ACCESS_TOKEN: "APP_USR-test-access", MERCADOPAGO_PUBLIC_KEY: "APP_USR-test-public", MERCADOPAGO_WEBHOOK_SECRET: SECRET, CHECKOUT_CARD: "on" };
 const env = (over: Record<string, string> = {}) => ({ ...ENV, ...over }) as unknown as NodeJS.ProcessEnv;
 const PIX_CODE = "00020126580014br.gov.bcb.pix0136mp-pix-test5204000053039865405019.905802BR5913LASTRO6009SAO PAULO62070503***6304ABCD";
 const CARD = { token: "ff8080814c11e237014c1ff593b57b4d", payment_method_id: "master", issuer_id: "24" };
@@ -97,6 +97,16 @@ test("mercadopago: only configured with access token, public key and webhook sec
   assert.equal(mercadoPagoConfig(env({ MERCADOPAGO_STATEMENT_DESCRIPTOR: "Lastro Finance Ltda!" }))?.statementDescriptor, "Lastro Financ");
   const p = getPaymentProvider("mercadopago", env());
   assert.deepEqual([p?.id, p?.methods, p?.publicKey, p?.billingFields], ["mercadopago", ["pix", "card"], "APP_USR-test-public", ["name", "email", "cpf"]]);
+});
+
+test("registry: card is paused in the checkout unless CHECKOUT_CARD=on; Pix stays", () => {
+  const allMp = env({ PAYMENT_PROVIDER_CARD: "mercadopago", PAYMENT_PROVIDER_PIX: "mercadopago", CHECKOUT_CARD: "" });
+  assert.equal(providerForMethod("card", allMp), null);
+  assert.deepEqual(checkoutProviders(allMp).map((o) => [o.method, o.provider.id]), [["pix", "mercadopago"]]);
+  assert.equal(providerForMethod("card", env({ PAYMENT_PROVIDER: "mercadopago", CHECKOUT_CARD: "off" })), null);
+  // The gateway itself stays configured (status checks, webhooks and refunds of card orders).
+  assert.equal(getPaymentProvider("mercadopago", allMp)?.methods.includes("card"), true);
+  assert.equal(providerForMethod("card", env({ ...allMp, CHECKOUT_CARD: "on" }))?.id, "mercadopago");
 });
 
 test("registry: Pix and card each have their own gateway; a missing one just isn't offered", () => {
