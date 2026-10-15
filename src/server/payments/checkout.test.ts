@@ -21,7 +21,7 @@ const approve = (orderId: string, over: Record<string, unknown> = {}) => ({
   type: "payment.approved" as const,
   orderId,
   transactionId: `tx_${randomUUID()}`,
-  amountMinor: 7990,
+  amountMinor: 2990,
   currency: "BRL",
   occurredAt: new Date(),
   ...over,
@@ -29,10 +29,10 @@ const approve = (orderId: string, over: Record<string, unknown> = {}) => ({
 
 /* ------------------------------------ catalog ------------------------------------ */
 
-test("plans: one catalog — R$ 19,90/mês and R$ 79,90 único — and the database rows match it", async () => {
+test("plans: one catalog — R$ 7,90/mês and R$ 29,90 único — and the database rows match it", async () => {
   const db = await freshDb();
-  assert.equal(PLANS.mensal.amountMinor, 1990);
-  assert.equal(PLANS.vitalicio.amountMinor, 7990);
+  assert.equal(PLANS.mensal.amountMinor, 790);
+  assert.equal(PLANS.vitalicio.amountMinor, 2990);
   const rows = await db.query<{ id: string; amount_minor: number; currency: string; billing: string }>(`select id, amount_minor, currency, billing from lastro.plans order by id`);
   assert.deepEqual(
     rows.map((r) => [r.id, r.amount_minor, r.currency, r.billing]),
@@ -72,7 +72,7 @@ test("checkout: the price is the catalog's, unknown plans and methods are refuse
   const u = await newUser(db, config);
   const r = await createOrder(db, config, { userId: u, planId: "mensal", method: "pix", idempotencyKey: "k_aaaaaaaa", visitorId: null, provider: SANDBOX });
   assert.ok(r.ok);
-  assert.equal(r.order.amount_minor, 1990);
+  assert.equal(r.order.amount_minor, 790);
   assert.equal(r.order.currency, "BRL");
   assert.equal((await createOrder(db, config, { userId: u, planId: "premium", method: "pix", idempotencyKey: "k_bbbbbbbb", visitorId: null, provider: SANDBOX })).ok, false);
   const m = await createOrder(db, config, { userId: u, planId: "mensal", method: "boleto", idempotencyKey: "k_cccccccc", visitorId: null, provider: SANDBOX });
@@ -142,7 +142,7 @@ test("only a verified, matching confirmation releases access: pending, failed, e
   ({ orderId } = await openOrder(db, config, u, "vitalicio"));
   assert.equal(await handlePaymentEvent(db, config, "sandbox", { providerEventId: "x1", type: "payment.expired", orderId, occurredAt: new Date() }), "applied");
   ({ orderId } = await openOrder(db, config, u, "vitalicio"));
-  assert.equal(await handlePaymentEvent(db, config, "sandbox", approve(orderId, { amountMinor: 1990 })), "review");
+  assert.equal(await handlePaymentEvent(db, config, "sandbox", approve(orderId, { amountMinor: 790 })), "review");
   assert.equal(await handlePaymentEvent(db, config, "sandbox", approve(orderId, { currency: "USD" })), "review");
   assert.equal(await handlePaymentEvent(db, config, "sandbox", approve(orderId, { amountMinor: undefined })), "review");
   // An event for another gateway's order is not this order.
@@ -177,7 +177,7 @@ test("out of order: a refund that overtakes its payment is not recorded and wait
   const config = testConfig();
   const u = await newUser(db, config);
   const { orderId } = await openOrder(db, config, u, "vitalicio");
-  const refund = { providerEventId: "evt_refund", type: "payment.refunded" as const, refundedTransactionId: "tx_late", amountMinor: 7990, currency: "BRL", occurredAt: new Date() };
+  const refund = { providerEventId: "evt_refund", type: "payment.refunded" as const, refundedTransactionId: "tx_late", amountMinor: 2990, currency: "BRL", occurredAt: new Date() };
   await assert.rejects(handlePaymentEvent(db, config, "sandbox", refund), RetryLater);
   assert.equal((await db.query(`select 1 from lastro.processed_webhooks where provider_event_id = 'evt_refund'`)).length, 0);
 
@@ -207,7 +207,7 @@ test("monthly: access until the end of the paid month, payments stack, expiry bl
   const paid = new Date("2026-05-10T15:00:00-03:00");
   // Pix month (no subscription): order + confirmation.
   const { orderId } = await openOrder(db, config, u, "mensal", { at: paid });
-  await handlePaymentEvent(db, config, "sandbox", approve(orderId, { amountMinor: 1990, occurredAt: paid }));
+  await handlePaymentEvent(db, config, "sandbox", approve(orderId, { amountMinor: 790, occurredAt: paid }));
   const a = await access(db, u, new Date("2026-05-20T12:00:00-03:00"));
   assert.deepEqual([a.active, a.state, a.validUntil, a.subscription], [true, "monthly", new Date("2026-06-10T15:00:00-03:00").toISOString(), null]);
 
@@ -215,7 +215,7 @@ test("monthly: access until the end of the paid month, payments stack, expiry bl
   await assert.rejects(openOrder(db, config, u, "mensal", { at: new Date("2026-06-01T00:00:00-03:00") }), /already_monthly/);
   // …but a month CONFIRMED while another still runs (a late Pix) extends it, never overlaps.
   const o2 = await openOrder(db, config, u, "mensal", { at: new Date("2026-06-11T00:00:00-03:00") });
-  await handlePaymentEvent(db, config, "sandbox", approve(o2.orderId, { amountMinor: 1990, occurredAt: new Date("2026-06-05T09:00:00-03:00") }));
+  await handlePaymentEvent(db, config, "sandbox", approve(o2.orderId, { amountMinor: 790, occurredAt: new Date("2026-06-05T09:00:00-03:00") }));
   assert.equal((await access(db, u, new Date("2026-07-01T00:00:00-03:00"))).validUntil, new Date("2026-07-10T15:00:00-03:00").toISOString());
 
   // After the paid time: blocked, entitlement rows and orders untouched.
@@ -237,11 +237,11 @@ test("subscription: a renewal adds the next period; cancelling renewal keeps the
   const u = await newUser(db, config);
   const t0 = new Date("2026-03-01T10:00:00-03:00");
   const { orderId } = await openOrder(db, config, u, "mensal", { at: t0 });
-  await handlePaymentEvent(db, config, "sandbox", approve(orderId, { amountMinor: 1990, providerSubscriptionId: "sub_1", occurredAt: t0 }));
+  await handlePaymentEvent(db, config, "sandbox", approve(orderId, { amountMinor: 790, providerSubscriptionId: "sub_1", occurredAt: t0 }));
   let a = await access(db, u, t0);
   assert.equal(a.subscription?.nextChargeAt, new Date("2026-04-01T10:00:00-03:00").toISOString());
 
-  await handlePaymentEvent(db, config, "sandbox", { providerEventId: "rn1", type: "subscription.renewed", providerSubscriptionId: "sub_1", transactionId: "tx_rn1", amountMinor: 1990, currency: "BRL", occurredAt: new Date("2026-04-01T10:00:00-03:00") });
+  await handlePaymentEvent(db, config, "sandbox", { providerEventId: "rn1", type: "subscription.renewed", providerSubscriptionId: "sub_1", transactionId: "tx_rn1", amountMinor: 790, currency: "BRL", occurredAt: new Date("2026-04-01T10:00:00-03:00") });
   a = await access(db, u, new Date("2026-04-02T00:00:00-03:00"));
   assert.equal(a.validUntil, new Date("2026-05-01T10:00:00-03:00").toISOString());
 
@@ -260,7 +260,7 @@ test("upgrade mensal → vitalício: monthly kept while pending; lifetime on con
   const u = await newUser(db, config);
   const t0 = new Date();
   const m = await openOrder(db, config, u, "mensal", { at: t0 });
-  await handlePaymentEvent(db, config, "sandbox", approve(m.orderId, { amountMinor: 1990, providerSubscriptionId: "sub_up", occurredAt: t0 }));
+  await handlePaymentEvent(db, config, "sandbox", approve(m.orderId, { amountMinor: 790, providerSubscriptionId: "sub_up", occurredAt: t0 }));
 
   const up = await openOrder(db, config, u, "vitalicio");
   let a = await access(db, u);
@@ -284,8 +284,8 @@ test("upgrade mensal → vitalício: monthly kept while pending; lifetime on con
   assert.equal((await access(db, u)).renewalCancellationPending, false);
 
   // A late monthly event (renewal charged, then refunded) never takes the lifetime away.
-  await handlePaymentEvent(db, config, "sandbox", { providerEventId: "late_rn", type: "subscription.renewed", providerSubscriptionId: "sub_up", transactionId: "tx_late_rn", amountMinor: 1990, currency: "BRL", occurredAt: new Date() });
-  await handlePaymentEvent(db, config, "sandbox", { providerEventId: "late_rf", type: "payment.refunded", refundedTransactionId: "tx_late_rn", amountMinor: 1990, currency: "BRL", occurredAt: new Date() });
+  await handlePaymentEvent(db, config, "sandbox", { providerEventId: "late_rn", type: "subscription.renewed", providerSubscriptionId: "sub_up", transactionId: "tx_late_rn", amountMinor: 790, currency: "BRL", occurredAt: new Date() });
+  await handlePaymentEvent(db, config, "sandbox", { providerEventId: "late_rf", type: "payment.refunded", refundedTransactionId: "tx_late_rn", amountMinor: 790, currency: "BRL", occurredAt: new Date() });
   await handlePaymentEvent(db, config, "sandbox", { providerEventId: "late_fail", type: "payment.failed", providerSubscriptionId: "sub_up", occurredAt: new Date() });
   a = await access(db, u);
   assert.deepEqual([a.active, a.state, a.planId], [true, "lifetime", "vitalicio"]);
@@ -326,7 +326,7 @@ test("order status: only the owner sees it; a server-side query to the gateway c
   assert.equal((await orderStatus(db, config, a, orderId, provider))?.status, "pending");
   assert.equal((await access(db, a)).active, false);
 
-  provider.state.payments.set("sbx_pay_1", { id: "q1", type: "payment.approved", order_id: orderId, transaction_id: "tx_q", amount_minor: 7990, currency: "BRL" });
+  provider.state.payments.set("sbx_pay_1", { id: "q1", type: "payment.approved", order_id: orderId, transaction_id: "tx_q", amount_minor: 2990, currency: "BRL" });
   assert.equal((await orderStatus(db, config, a, orderId, provider))?.status, "approved");
   assert.equal((await access(db, a)).active, true);
   // The webhook for the same transaction arrives later: nothing doubles.
@@ -379,7 +379,7 @@ test("Centralis: link → sign-up → pay later → return within the window →
   const [purchase] = await outbox(db, "purchase");
   const v1 = toCentralisV1(purchase.payload as unknown as Envelope);
   assert.equal(v1.type, "purchase");
-  assert.equal(v1.data?.amount, 79.9); // never 7990
+  assert.equal(v1.data?.amount, 29.9); // never 2990
   assert.equal(v1.data?.currency, "BRL");
   assert.equal(v1.data?.affiliate_code, "JOAO");
   assert.equal(v1.data?.plan, "vitalicio");

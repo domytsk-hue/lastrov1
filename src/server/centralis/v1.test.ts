@@ -60,10 +60,10 @@ test("every event of a full flow maps to a valid Centralis v1 event", async () =
   const { transactionId } = await buy(db, config, maria, { visitorId: b.visitorId });
   await buy(db, config, joao, { plan: "mensal" });
   const [sub] = await db.query<{ provider_subscription_id: string }>(`select provider_subscription_id from lastro.subscriptions`);
-  await handlePaymentEvent(db, config, "sandbox", { providerEventId: "rn", type: "subscription.renewed", providerSubscriptionId: sub.provider_subscription_id, transactionId: "tx_rn", amountMinor: 1990, currency: "BRL", occurredAt: new Date() });
+  await handlePaymentEvent(db, config, "sandbox", { providerEventId: "rn", type: "subscription.renewed", providerSubscriptionId: sub.provider_subscription_id, transactionId: "tx_rn", amountMinor: 790, currency: "BRL", occurredAt: new Date() });
   await handlePaymentEvent(db, config, "sandbox", { providerEventId: "f", type: "payment.failed", providerSubscriptionId: sub.provider_subscription_id, occurredAt: new Date() });
   await handlePaymentEvent(db, config, "sandbox", { providerEventId: "c", type: "subscription.cancelled", providerSubscriptionId: sub.provider_subscription_id, occurredAt: new Date() });
-  await handlePaymentEvent(db, config, "sandbox", { providerEventId: "r", type: "payment.refunded", refundedTransactionId: transactionId, amountMinor: 7990, currency: "BRL", occurredAt: new Date() });
+  await handlePaymentEvent(db, config, "sandbox", { providerEventId: "r", type: "payment.refunded", refundedTransactionId: transactionId, amountMinor: 2990, currency: "BRL", occurredAt: new Date() });
   await handleCentralisAction(db, config, JSON.stringify(action(config, "affiliate.suspend", { centralis_affiliate_id: promoted.body.result?.centralis_affiliate_id })));
 
   const all = (await outbox(db)).map((e) => toCentralisV1(e.payload as unknown as Envelope));
@@ -75,9 +75,9 @@ test("every event of a full flow maps to a valid Centralis v1 event", async () =
 
   const purchases = all.filter((e) => e.type === "purchase");
   const first = purchases.find((p) => p.user?.id === maria)!;
-  assert.deepEqual([first.data?.amount, first.data?.currency, first.data?.affiliate_code, first.data?.plan], [79.9, "BRL", "JOAO", "vitalicio"]);
+  assert.deepEqual([first.data?.amount, first.data?.currency, first.data?.affiliate_code, first.data?.plan], [29.9, "BRL", "JOAO", "vitalicio"]);
   const renewal = purchases.find((p) => p.data?.kind === "renewal")!;
-  assert.equal(renewal.data?.amount, 19.9);
+  assert.equal(renewal.data?.amount, 7.9);
   assert.ok(renewal.data?.subscription_id, "renewal links to its subscription");
   const refund = all.find((e) => e.type === "refund")!;
   assert.equal(refund.data?.order_id, first.data?.order_id, "refund points at the purchase's order_id");

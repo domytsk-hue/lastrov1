@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 
 /**
  * POST /api/admin/payments/confirm  (Authorization: Bearer $CRON_SECRET)
- * { order_id, transaction_id, amount: "19.90" }
+ * { order_id, transaction_id, amount: "7.90" }
  *
  * For a person who checked in the gateway's own panel that a charge was paid but its
  * notification never reached Lastro (gateways without a status query, e.g. Simplify). The

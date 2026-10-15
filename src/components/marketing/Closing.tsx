@@ -149,8 +149,8 @@ export const PRICING = {
   monthly: toMajorUnits(PLANS.mensal.amountMinor),
   lifetime: toMajorUnits(PLANS.vitalicio.amountMinor),
 } as const;
-const YEARLY = Math.round(PRICING.monthly * 12 * 100) / 100; // 238,80
-const SAVING = Math.round((YEARLY - PRICING.lifetime) * 100) / 100; // 138,90
+const YEARLY = Math.round(PRICING.monthly * 12 * 100) / 100; // 94,80
+const SAVING = Math.round((YEARLY - PRICING.lifetime) * 100) / 100; // 64,90
 
 const INCLUDED = PLAN_BENEFITS;
 
