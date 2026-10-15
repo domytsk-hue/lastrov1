@@ -5,11 +5,12 @@ import { FinalCTA, PricingSection, ProductComparison, Testimonials, TrustSection
 import { Hero } from "./Hero";
 import { LastroOrbitShowcase } from "./LastroOrbitShowcase";
 import { MonthStory } from "./MonthStory";
+import { VslSection } from "./VslSection";
 import { BudgetShowcase, EducationMoment, GoalShowcase, InvestmentShowcase, NetWorthShowcase, ReserveShowcase } from "./Showcases";
 
 /**
  * The Lastro landing, told as a journey:
- *   "Oh, isso é diferente."  → Hero, fragmentation
+ *   "Oh, isso é diferente."  → Hero, the explanatory video, fragmentation
  *   "Entendi."               → month, Orbit, daily demo
  *   "Resolveria meu problema." → budget, reserve, goals, net worth, investments, learning
  *   "Quero testar."          → comparison, trust, plans, final CTA
@@ -19,7 +20,7 @@ export function LandingPage() {
   // yielding to taps in between (and hydrating first whatever the visitor touches), instead of
   // blocking a slow phone for the whole page at once. The HTML is the same.
   const sections = [
-    FinancialFragmentation, MonthStory, LastroOrbitShowcase, DailyDemo, BudgetShowcase, ReserveShowcase, GoalShowcase,
+    VslSection, FinancialFragmentation, MonthStory, LastroOrbitShowcase, DailyDemo, BudgetShowcase, ReserveShowcase, GoalShowcase,
     NetWorthShowcase, InvestmentShowcase, EducationMoment, ProductComparison, Testimonials, TrustSection, PricingSection, FinalCTA,
   ];
   return (

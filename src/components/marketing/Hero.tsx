@@ -1,7 +1,7 @@
 "use client";
 
 import { motion, useMotionValue, useReducedMotion, useScroll, useSpring, useTransform, type MotionValue } from "framer-motion";
-import { ArrowUpRight, Plane } from "lucide-react";
+import { ArrowUpRight, Plane, Play } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { ease } from "@/design-system/motion";
 import { Orbit } from "@/components/shared/data-viz/Orbit";
@@ -53,7 +53,10 @@ export function Hero() {
         </motion.p>
         <motion.div {...settle(T.cta, reduce)} className="mt-9 flex flex-col items-center justify-center gap-3 sm:flex-row">
           <PrimaryCta />
-          <SecondaryLink href="#produto">Conhecer o Lastro</SecondaryLink>
+          <SecondaryLink href="#video">
+            <Play className="mr-2 size-4 fill-current" aria-hidden />
+            Ver o vídeo
+          </SecondaryLink>
         </motion.div>
         <motion.p {...settle(T.cta + 0.1, reduce)} className="mt-5 text-[14px] text-ink-500">
           Conta criada em menos de um minuto · Sem cartão de crédito
