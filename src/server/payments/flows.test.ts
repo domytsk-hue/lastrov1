@@ -104,7 +104,7 @@ test("unknown or suspended codes are not counted", async () => {
   assert.deepEqual(await landWithRef(db, config, b, "JOAO"), { recorded: false, reason: "inactive" });
 });
 
-test("click + purchase: Maria enters via JOAO on day 1, returns directly on day 4 and buys R$ 79,90", async () => {
+test("click + purchase: Maria enters via JOAO on day 1, returns directly on day 4 and buys R$ 29,90", async () => {
   const db = await freshDb();
   const config = testConfig();
   const { joao, centralisId } = await joaoAffiliate(db);
@@ -117,7 +117,7 @@ test("click + purchase: Maria enters via JOAO on day 1, returns directly on day 
 
   const [p] = await outbox(db, "purchase");
   const purchase = p.payload as unknown as Purchase;
-  assert.equal(purchase.order.amount_minor, 7990);
+  assert.equal(purchase.order.amount_minor, 2990);
   assert.equal(purchase.order.currency, "BRL");
   assert.equal(purchase.order.plan_id, "vitalicio");
   assert.deepEqual(purchase.affiliate, { centralis_affiliate_id: centralisId, code: "JOAO" });
@@ -131,7 +131,7 @@ test("click + purchase: Maria enters via JOAO on day 1, returns directly on day 
   const s = (await myAffiliate(db, joao, "https://x"))!.stats;
   assert.equal(s.purchases, 1);
   assert.equal(s.signups, 1);
-  assert.equal(s.revenue_generated_minor, 7990);
+  assert.equal(s.revenue_generated_minor, 2990);
   assert.equal(s.commission_generated_minor, null);
 });
 
@@ -171,7 +171,7 @@ test("direct purchase is reported with affiliate = null", async () => {
   await buy(db, config, userId);
   const p = (await outbox(db, "purchase"))[0].payload as unknown as Purchase;
   assert.equal(p.affiliate, null);
-  assert.equal(p.order.amount_minor, 7990);
+  assert.equal(p.order.amount_minor, 2990);
 });
 
 test("checkout started or payment pending is not a purchase", async () => {
@@ -194,7 +194,7 @@ test("duplicate webhook (same event, or same transaction under a new event id) c
   const config = testConfig();
   const userId = await newUser(db, config, "Fábio");
   const started = await openOrder(db, config, userId, "vitalicio");
-  const ev = { providerEventId: "evt_1", type: "payment.approved" as const, orderId: started.orderId, transactionId: "tx_1", amountMinor: 7990, currency: "BRL", occurredAt: new Date() };
+  const ev = { providerEventId: "evt_1", type: "payment.approved" as const, orderId: started.orderId, transactionId: "tx_1", amountMinor: 2990, currency: "BRL", occurredAt: new Date() };
   assert.equal(await handlePaymentEvent(db, config, "sandbox", ev), "applied");
   assert.equal(await handlePaymentEvent(db, config, "sandbox", ev), "duplicate");
   assert.equal(await handlePaymentEvent(db, config, "sandbox", { ...ev, providerEventId: "evt_2" }), "duplicate");
@@ -204,11 +204,11 @@ test("duplicate webhook (same event, or same transaction under a new event id) c
 
 test("sandbox webhooks must be signed; nothing but a verified webhook approves an order", async () => {
   const provider = createSandboxProvider("whsec_test");
-  const body = JSON.stringify({ id: "evt_x", type: "payment.approved", order_id: randomUUID(), transaction_id: "tx", amount_minor: 7990, currency: "BRL" });
+  const body = JSON.stringify({ id: "evt_x", type: "payment.approved", order_id: randomUUID(), transaction_id: "tx", amount_minor: 2990, currency: "BRL" });
   assert.equal(await provider.parseWebhook(body, new Headers({ "x-sandbox-signature": "0".repeat(64) }), new URL("https://x/")), null);
   assert.equal(await provider.parseWebhook(body, new Headers(), new URL("https://x/")), null);
   const events = await provider.parseWebhook(body, new Headers({ "x-sandbox-signature": signSandboxWebhook("whsec_test", body) }), new URL("https://x/"));
-  assert.equal(events?.[0].amountMinor, 7990);
+  assert.equal(events?.[0].amountMinor, 2990);
 });
 
 test("Centralis offline during payment: access released, order approved, purchase waits in the outbox", async () => {
@@ -236,12 +236,12 @@ test("refund references the original purchase and removes the plan", async () =>
   const config = testConfig();
   const userId = await newUser(db, config, "Hugo");
   const { orderId, transactionId } = await buy(db, config, userId);
-  const r = await handlePaymentEvent(db, config, "sandbox", { providerEventId: "evt_r", type: "payment.refunded", refundedTransactionId: transactionId, amountMinor: 7990, currency: "BRL", occurredAt: new Date() });
+  const r = await handlePaymentEvent(db, config, "sandbox", { providerEventId: "evt_r", type: "payment.refunded", refundedTransactionId: transactionId, amountMinor: 2990, currency: "BRL", occurredAt: new Date() });
   assert.equal(r, "applied");
   const refund = (await outbox(db, "refund"))[0].payload as { original: { external_order_id: string; gateway_transaction_id: string }; refund: { amount_minor: number } };
   assert.equal(refund.original.external_order_id, orderId);
   assert.equal(refund.original.gateway_transaction_id, transactionId);
-  assert.equal(refund.refund.amount_minor, 7990);
+  assert.equal(refund.refund.amount_minor, 2990);
   const [u] = await db.query<{ plan_id: string | null }>(`select plan_id from lastro.users where id = $1`, [userId]);
   assert.equal(u.plan_id, null);
   assert.equal(await handlePaymentEvent(db, config, "sandbox", { providerEventId: "evt_r2", type: "payment.refunded", refundedTransactionId: transactionId, occurredAt: new Date() }), "duplicate");
@@ -260,9 +260,9 @@ test("monthly plan: subscription created, renewal is its own purchase with the o
 
   await handlePaymentEvent(db, config, "sandbox", { providerEventId: "evt_f", type: "payment.failed", providerSubscriptionId: sub.provider_subscription_id, occurredAt: new Date() });
   assert.equal((await outbox(db, "payment.failed")).length, 1);
-  await handlePaymentEvent(db, config, "sandbox", { providerEventId: "evt_rn", type: "subscription.renewed", providerSubscriptionId: sub.provider_subscription_id, transactionId: "tx_rn", amountMinor: 1990, currency: "BRL", occurredAt: new Date() });
+  await handlePaymentEvent(db, config, "sandbox", { providerEventId: "evt_rn", type: "subscription.renewed", providerSubscriptionId: sub.provider_subscription_id, transactionId: "tx_rn", amountMinor: 790, currency: "BRL", occurredAt: new Date() });
   const purchases = (await outbox(db, "purchase")).map((e) => e.payload as unknown as Purchase);
-  assert.deepEqual(purchases.map((p) => [p.order.kind, p.order.amount_minor, p.affiliate?.code]), [["initial", 1990, "JOAO"], ["renewal", 1990, "JOAO"]]);
+  assert.deepEqual(purchases.map((p) => [p.order.kind, p.order.amount_minor, p.affiliate?.code]), [["initial", 790, "JOAO"], ["renewal", 790, "JOAO"]]);
   assert.equal((await outbox(db, "subscription.renewed")).length, 1);
 
   await handlePaymentEvent(db, config, "sandbox", { providerEventId: "evt_c", type: "subscription.cancelled", providerSubscriptionId: sub.provider_subscription_id, occurredAt: new Date() });
@@ -273,7 +273,7 @@ test("monthly plan: subscription created, renewal is its own purchase with the o
 
 /* -------------------------------- the whole story (§95) -------------------------------- */
 
-test("João: 100 visitors, 3 purchases of R$ 79,90 → R$ 239,70 reported; Centralis' commission shows on his dashboard", async () => {
+test("João: 100 visitors, 3 purchases of R$ 29,90 → R$ 89,70 reported; Centralis' commission shows on his dashboard", async () => {
   const db = await freshDb();
   const config = testConfig();
   const { joao, centralisId } = await joaoAffiliate(db);
@@ -293,22 +293,22 @@ test("João: 100 visitors, 3 purchases of R$ 79,90 → R$ 239,70 reported; Centr
 
   const purchases = (await outbox(db, "purchase")).map((e) => e.payload as unknown as Purchase);
   assert.equal(purchases.length, 3);
-  assert.ok(purchases.every((p) => p.order.amount_minor === 7990 && p.order.currency === "BRL" && p.affiliate?.code === "JOAO"));
-  assert.equal(purchases.reduce((s, p) => s + p.order.amount_minor, 0), 23970);
+  assert.ok(purchases.every((p) => p.order.amount_minor === 2990 && p.order.currency === "BRL" && p.affiliate?.code === "JOAO"));
+  assert.equal(purchases.reduce((s, p) => s + p.order.amount_minor, 0), 8970);
   assert.equal((await outbox(db, "affiliate.click")).length, 100);
 
-  // Centralis computes 20% of 23970 = 5994 and pushes it back.
-  const sync = await handleCentralisAction(db, config, JSON.stringify(action(config, "affiliate.stats_sync", { centralis_affiliate_id: centralisId, stats: { commission_generated_minor: 5994, pending_commission_minor: 5994, paid_commission_minor: 0, currency: "BRL" } })));
+  // Centralis computes 20% of 8970 = 1794 and pushes it back.
+  const sync = await handleCentralisAction(db, config, JSON.stringify(action(config, "affiliate.stats_sync", { centralis_affiliate_id: centralisId, stats: { commission_generated_minor: 1794, pending_commission_minor: 1794, paid_commission_minor: 0, currency: "BRL" } })));
   assert.equal(sync.body.success, true);
 
   const s = (await myAffiliate(db, joao, "https://lastro.app"))!.stats;
   assert.equal(s.visits, 100);
   assert.equal(s.unique_visitors, 100);
   assert.equal(s.purchases, 3);
-  assert.equal(s.revenue_generated_minor, 23970);
+  assert.equal(s.revenue_generated_minor, 8970);
   assert.equal(s.conversion_rate, 0.03);
-  assert.equal(s.commission_generated_minor, 5994);
-  assert.equal(s.pending_commission_minor, 5994);
+  assert.equal(s.commission_generated_minor, 1794);
+  assert.equal(s.pending_commission_minor, 1794);
 
   // An affiliate's view is resolved from their own user id only.
   const stranger = await newUser(db, config, "Estranho");

@@ -135,10 +135,10 @@ test("mercadopago: only a well-formed card token is accepted — never card data
 });
 
 test("mercadopago: statuses map conservatively (authorized or in analysis is not money)", () => {
-  const ev = (status: string) => paymentEvent({ id: 1, status, transaction_amount: 79.9, currency_id: "BRL" }).type;
+  const ev = (status: string) => paymentEvent({ id: 1, status, transaction_amount: 29.9, currency_id: "BRL" }).type;
   assert.deepEqual(["approved", "in_process", "authorized", "rejected", "refunded", "charged_back", "in_mediation"].map(ev), ["payment.approved", "payment.pending", "payment.pending", "payment.failed", "payment.refunded", "payment.refunded", "unhandled"]);
-  const e = paymentEvent({ id: 7, status: "approved", transaction_amount: 19.9, currency_id: "brl", external_reference: "not-a-uuid" });
-  assert.deepEqual([e.amountMinor, e.currency, e.orderId], [1990, "BRL", undefined]);
+  const e = paymentEvent({ id: 7, status: "approved", transaction_amount: 7.9, currency_id: "brl", external_reference: "not-a-uuid" });
+  assert.deepEqual([e.amountMinor, e.currency, e.orderId], [790, "BRL", undefined]);
 });
 
 /* ------------------------------------ checkout ------------------------------------ */
@@ -151,7 +151,7 @@ test("mercadopago: the charge uses the catalog price, the card token and our ord
   const { orderId, result } = await pay(db, c, p, u);
   const call = api.calls[0];
   assert.deepEqual([call.method, call.path], ["POST", "/v1/payments"]);
-  assert.equal(call.body?.transaction_amount, 79.9);
+  assert.equal(call.body?.transaction_amount, 29.9);
   assert.equal(call.body?.token, CARD.token);
   assert.equal(call.body?.installments, 1);
   assert.equal(call.body?.external_reference, orderId);
@@ -161,7 +161,7 @@ test("mercadopago: the charge uses the catalog price, the card token and our ord
   // Nothing card-like or secret is stored on the order.
   const [row] = await db.query<{ payment_instructions: unknown }>(`select payment_instructions from lastro.orders where id = $1`, [orderId]);
   assert.deepEqual(row.payment_instructions, { kind: "awaiting" });
-  await assert.rejects(p.createCheckout({ orderId, plan: { id: "vitalicio", name: "", amountMinor: 7990, currency: "BRL", billing: "one_time" }, method: "card", customer: null, card: null, returnUrl: "" }));
+  await assert.rejects(p.createCheckout({ orderId, plan: { id: "vitalicio", name: "", amountMinor: 2990, currency: "BRL", billing: "one_time" }, method: "card", customer: null, card: null, returnUrl: "" }));
 });
 
 test("mercadopago: an approved card is confirmed by asking Mercado Pago, once — page and webhook alike", async () => {
@@ -252,7 +252,7 @@ test("mercadopago: an API outage during a webhook throws (Mercado Pago delivers 
 test("mercadopago: a refusal is logged with Mercado Pago's reason, never the token", async () => {
   const p = createMercadoPagoProvider(mercadoPagoConfig(env()) as MercadoPagoConfig, (async () =>
     new Response(JSON.stringify({ message: "invalid parameters", error: "bad_request", status: 400, cause: [{ code: 2006, description: "Card Token not found" }] }), { status: 400 })) as typeof fetch);
-  const err = await p.createCheckout({ orderId: randomUUID(), plan: { id: "mensal", name: "Mensal", amountMinor: 1990, currency: "BRL", billing: "monthly" }, method: "card", customer: null, card: parseCardInput(CARD), returnUrl: "" }).catch((e: Error) => e);
+  const err = await p.createCheckout({ orderId: randomUUID(), plan: { id: "mensal", name: "Mensal", amountMinor: 790, currency: "BRL", billing: "monthly" }, method: "card", customer: null, card: parseCardInput(CARD), returnUrl: "" }).catch((e: Error) => e);
   assert.ok(err instanceof Error);
   assert.match(err.message, /400 bad_request \| invalid parameters \| 2006 Card Token not found/);
   assert.ok(!err.message.includes(CARD.token));
@@ -283,7 +283,7 @@ test("mercadopago Pix: a Pix charge with the catalog price, our order id and an 
   const { orderId, result } = await payPix(db, c, p, u);
   const call = api.calls[0];
   assert.equal(call.body?.payment_method_id, "pix");
-  assert.equal(call.body?.transaction_amount, 19.9);
+  assert.equal(call.body?.transaction_amount, 7.9);
   assert.equal(call.body?.external_reference, orderId);
   assert.equal(call.body?.token, undefined);
   assert.deepEqual(call.body?.payer, { email: "maria@exemplo.com", first_name: "Maria", last_name: "Souza Lima", identification: { type: "CPF", number: "52998224725" } });
@@ -326,7 +326,7 @@ test("mercadopago Pix: an expired Pix closes the order as expired, nothing relea
 });
 
 test("mercadopago Pix: a 4xx or a Pix without code is an error, never a fake charge", async () => {
-  const req = { orderId: randomUUID(), plan: { id: "mensal", name: "Mensal", amountMinor: 1990, currency: "BRL", billing: "monthly" as const }, method: "pix" as const, customer: { userId: "u", name: "Maria", email: "maria@exemplo.com", phone: null, document: "52998224725" }, card: null, returnUrl: "" };
+  const req = { orderId: randomUUID(), plan: { id: "mensal", name: "Mensal", amountMinor: 790, currency: "BRL", billing: "monthly" as const }, method: "pix" as const, customer: { userId: "u", name: "Maria", email: "maria@exemplo.com", phone: null, document: "52998224725" }, card: null, returnUrl: "" };
   const refusing = createMercadoPagoProvider(mercadoPagoConfig(env()) as MercadoPagoConfig, (async () => new Response(JSON.stringify({ message: "Financial Identity Use Case was not found", error: "bad_request", status: 400, cause: [{ code: 13253, description: "Collector user without key enabled for QR render" }] }), { status: 400 })) as typeof fetch);
   const err = await refusing.createCheckout(req).catch((e: Error) => e);
   assert.ok(err instanceof Error && /400 .*13253 Collector user without key enabled/.test(err.message), String(err));
@@ -344,7 +344,7 @@ test("mercadopago: anti-fraud signals — device id header and buyer details go 
   if (!r.ok) throw new Error(r.error);
   await p.createCheckout({
     orderId: r.order.id,
-    plan: { id: "mensal", name: "Mensal", amountMinor: 1990, currency: "BRL", billing: "monthly" },
+    plan: { id: "mensal", name: "Mensal", amountMinor: 790, currency: "BRL", billing: "monthly" },
     method: "card",
     customer: { userId: u, name: "Maria Souza Lima", email: "maria@exemplo.com", phone: "+5511987654321", document: "52998224725" },
     card: parseCardInput({ ...CARD, device_id: "armor.1a2b3c4d5e6f7a8b9c0d" }),

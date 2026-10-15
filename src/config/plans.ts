@@ -17,7 +17,7 @@ export interface PlanDefinition {
   amountMinor: number;
   currency: "BRL";
   billing: "monthly" | "one_time";
-  /** How the price is said everywhere: "R$ 19,90 por mês" / "R$ 79,90 em pagamento único". */
+  /** How the price is said everywhere: "R$ 7,90 por mês" / "R$ 29,90 em pagamento único". */
   priceLabel: string;
   /** Short nature of the charge, for summaries. */
   billingLabel: string;
@@ -27,19 +27,19 @@ export const PLANS: Record<PlanId, PlanDefinition> = {
   mensal: {
     id: "mensal",
     name: "Mensal",
-    amountMinor: 1990,
+    amountMinor: 790,
     currency: "BRL",
     billing: "monthly",
-    priceLabel: "R$ 19,90 por mês",
+    priceLabel: "R$ 7,90 por mês",
     billingLabel: "Cobrança mensal",
   },
   vitalicio: {
     id: "vitalicio",
     name: "Vitalício",
-    amountMinor: 7990,
+    amountMinor: 2990,
     currency: "BRL",
     billing: "one_time",
-    priceLabel: "R$ 79,90 em pagamento único",
+    priceLabel: "R$ 29,90 em pagamento único",
     billingLabel: "Pagamento único · acesso para sempre",
   },
 };
@@ -51,5 +51,5 @@ export const isPlanId = (v: unknown): v is PlanId => typeof v === "string" && (P
 /** Both plans include everything; this is the list the landing shows. */
 export const PLAN_BENEFITS = ["Orçamentos, metas e reserva", "Patrimônio e investimentos", "Aulas no momento certo"] as const;
 
-/** Minor units → major units for display math (1990 → 19.9). */
+/** Minor units → major units for display math (790 → 7.9). */
 export const toMajorUnits = (minor: number) => minor / 100;
