@@ -49,7 +49,7 @@ export function addBillingMonth(from: Date, months = 1): Date {
 
 /* ---------------------------------- reading access ---------------------------------- */
 
-interface EntitlementRow {
+export interface EntitlementRow {
   plan_id: string | null;
   source: string;
   starts_at: Date;
@@ -58,18 +58,32 @@ interface EntitlementRow {
 
 const toDate = (v: Date | string | null) => (v == null ? null : new Date(v));
 
-export async function getAccess(db: Db, userId: string, now = new Date(), env: PaywallEnv = process.env): Promise<AccessSummary> {
-  const rows = (
-    await db.query<EntitlementRow>(
-      `select plan_id, source, starts_at, ends_at from lastro.access_entitlements where user_id = $1 and status = 'active'`,
-      [userId],
-    )
-  ).map((r) => ({ ...r, starts_at: toDate(r.starts_at)!, ends_at: toDate(r.ends_at) }));
-
+/** What a user's active entitlements give at `now`. Pure: no database. */
+export function holdings(raw: EntitlementRow[], now: Date) {
+  const rows = raw.map((r) => ({ ...r, starts_at: toDate(r.starts_at)!, ends_at: toDate(r.ends_at) }));
   const current = rows.filter((r) => r.starts_at <= now && (!r.ends_at || r.ends_at > now));
   const lifetime = current.some((r) => r.plan_id === "vitalicio" && !r.ends_at);
   const monthlyNow = current.filter((r) => r.plan_id === "mensal");
   const granted = current.some((r) => r.source === "admin");
+  return { rows, lifetime, monthlyNow, granted, active: lifetime || monthlyNow.length > 0 || granted };
+}
+
+export async function getAccess(db: Db, userId: string, now = new Date(), env: PaywallEnv = process.env): Promise<AccessSummary> {
+  // Independent reads, sent together: one round trip to the database instead of five.
+  const [entitlements, [sub], [cancelTask], [pending], [u]] = await Promise.all([
+    db.query<EntitlementRow>(`select plan_id, source, starts_at, ends_at from lastro.access_entitlements where user_id = $1 and status = 'active'`, [userId]),
+    db.query<{ status: string; cancel_at_period_end: boolean; current_period_end: Date | null }>(
+      `select status, cancel_at_period_end, current_period_end from lastro.subscriptions where user_id = $1 and status <> 'cancelled' order by created_at desc limit 1`,
+      [userId],
+    ),
+    db.query(`select 1 from lastro.payment_reviews where user_id = $1 and kind = 'cancel_renewal' and status = 'open' limit 1`, [userId]),
+    db.query<{ id: string; plan_id: string; payment_method: string | null; purpose: "new" | "upgrade"; created_at: Date; expires_at: Date | null }>(
+      `select id, plan_id, payment_method, purpose, created_at, expires_at from lastro.orders where user_id = $1 and status = 'pending' limit 1`,
+      [userId],
+    ),
+    db.query<{ checkout_deferred_at: Date | null }>(`select checkout_deferred_at from lastro.users where id = $1`, [userId]),
+  ]);
+  const { rows, lifetime, monthlyNow, granted, active } = holdings(entitlements, now);
   // Paid months chain: the latest end among monthly entitlements that are current or start
   // exactly where another ends (paid in advance).
   let validUntil: Date | null = null;
@@ -83,20 +97,9 @@ export async function getAccess(db: Db, userId: string, now = new Date(), env: P
   const state: AccessState = lifetime ? "lifetime" : monthlyNow.length ? "monthly" : granted ? "granted" : hadMonthly ? "expired" : "none";
   const paywall = paywallEnabled(env);
 
-  const [sub] = await db.query<{ status: string; cancel_at_period_end: boolean; current_period_end: Date | null }>(
-    `select status, cancel_at_period_end, current_period_end from lastro.subscriptions where user_id = $1 and status <> 'cancelled' order by created_at desc limit 1`,
-    [userId],
-  );
-  const [cancelTask] = await db.query(`select 1 from lastro.payment_reviews where user_id = $1 and kind = 'cancel_renewal' and status = 'open' limit 1`, [userId]);
-  const [pending] = await db.query<{ id: string; plan_id: string; payment_method: string | null; purpose: "new" | "upgrade"; created_at: Date; expires_at: Date | null }>(
-    `select id, plan_id, payment_method, purpose, created_at, expires_at from lastro.orders where user_id = $1 and status = 'pending' limit 1`,
-    [userId],
-  );
-  const [u] = await db.query<{ checkout_deferred_at: Date | null }>(`select checkout_deferred_at from lastro.users where id = $1`, [userId]);
-
   return {
     paywall,
-    active: !paywall || lifetime || monthlyNow.length > 0 || granted,
+    active: !paywall || active,
     state,
     planId: lifetime ? "vitalicio" : monthlyNow.length ? "mensal" : null,
     validUntil: state === "monthly" && validUntil ? validUntil.toISOString() : null,

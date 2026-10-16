@@ -37,6 +37,8 @@ function NavPill({ item, active, layoutId, dark }: { item: NavItem; active: bool
   return (
     <Link
       href={item.href}
+      // The main sections are loaded as soon as the app opens: a tap shows them at once.
+      prefetch
       aria-current={active ? "page" : undefined}
       aria-label={item.label}
       className={cn(
@@ -81,6 +83,7 @@ export function FloatingNavDesktop({ locked = false }: { locked?: boolean }) {
         <span className="mx-1 h-6 w-px bg-ink-900/10" aria-hidden />
         <Link
           href={ROUTES.perfil}
+          prefetch
           aria-current={profileActive ? "page" : undefined}
           aria-label="Perfil"
           className={cn("grid size-12 place-items-center rounded-full transition-shadow", profileActive && "ring-2 ring-midnight ring-offset-2 ring-offset-white")}
