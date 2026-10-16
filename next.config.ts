@@ -24,6 +24,12 @@ const nextConfig: NextConfig = {
   reactStrictMode: true,
   // Database drivers run only on the server, loaded as-is (PGlite ships its own WASM files).
   serverExternalPackages: ["@electric-sql/pglite", "postgres"],
+  experimental: {
+    // A page of the app visited (or prefetched) in the last 30 s opens from the browser,
+    // without asking the server again. Each page still checks access on the server whenever
+    // it is fetched; paying refreshes the router, so a new plan shows at once.
+    staleTimes: { dynamic: 30 },
+  },
   async redirects() {
     return [
       ...legacyProductRoutes.map(([source, destination]) => ({ source, destination, permanent: true })),

@@ -34,7 +34,7 @@ interface UserRow {
 }
 
 const INVALID_CREDENTIALS = "E-mail, telefone ou senha incorretos.";
-const sessionId = (token: string) => createHash("sha256").update(token).digest("hex");
+export const sessionId = (token: string) => createHash("sha256").update(token).digest("hex");
 
 export const toClientSession = (u: Pick<UserRow, "id" | "name" | "email" | "phone">): ClientSession => ({
   userId: u.id,

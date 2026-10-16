@@ -2,7 +2,8 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import { ChevronLeft, ChevronRight, CreditCard, Landmark, Repeat, Search, ShieldCheck, Target, TrendingUp, Wallet } from "lucide-react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
+import { replaceQuery } from "@/lib/url";
 import { useId, useMemo, useState } from "react";
 import { getCategory } from "@/product/data/categories";
 import { cn } from "@/lib/cn";
@@ -23,10 +24,9 @@ type Filter = "all" | TransactionType;
 
 export function MovementsScreen() {
   const params = useSearchParams();
-  const router = useRouter();
   const pathname = usePathname();
   const tab = (params.get("aba") as Tab) || "transacoes";
-  const setTab = (t: Tab) => router.replace(t === "transacoes" ? pathname : `${pathname}?aba=${t}`, { scroll: false });
+  const setTab = (t: Tab) => replaceQuery(t === "transacoes" ? pathname : `${pathname}?aba=${t}`);
 
   return (
     <>

@@ -1,6 +1,7 @@
 "use client";
 
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
+import { replaceQuery } from "@/lib/url";
 import { useFinance } from "@/product/store/finance-store";
 import { LessonSheet } from "@/components/product/grow/LessonSheet";
 import { Academy, FinancialTimelineSection, InsightsList, Investments, Missions, NetWorth } from "@/components/product/grow/GrowSections";
@@ -10,7 +11,6 @@ import { StoryTitle } from "@/components/shared/surfaces/Surface";
 export function GrowScreen() {
   const { state } = useFinance();
   const params = useSearchParams();
-  const router = useRouter();
   const pathname = usePathname();
   const lesson = state.lessons.find((l) => l.id === params.get("aula") && l.available) ?? null;
 
@@ -26,7 +26,7 @@ export function GrowScreen() {
         <Investments />
         <div className="grid gap-8 lg:grid-cols-12">
           <div className="min-w-0 lg:col-span-7">
-            <Academy onOpen={(id) => router.replace(`${pathname}?aula=${id}`, { scroll: false })} />
+            <Academy onOpen={(id) => replaceQuery(`${pathname}?aula=${id}`)} />
           </div>
           <div className="min-w-0 lg:col-span-5">
             <Missions />
@@ -34,7 +34,7 @@ export function GrowScreen() {
         </div>
         <InsightsList />
       </div>
-      <LessonSheet lesson={lesson} onClose={() => router.replace(pathname, { scroll: false })} />
+      <LessonSheet lesson={lesson} onClose={() => replaceQuery(pathname)} />
     </>
   );
 }
